@@ -5,6 +5,8 @@
 set -e
 
 PREFIX="${PREFIX:-/usr/local/bin}"
+GITHUB_REPO="weber8thomas/claude-vault"
+GITHUB_BRANCH="main"
 
 echo "Installing claude-vault to $PREFIX..."
 
@@ -17,9 +19,37 @@ if [ ! -w "$PREFIX" ]; then
     exit 1
 fi
 
-# Copy all scripts
-echo "Copying scripts..."
-cp -v bin/* "$PREFIX/"
+# Determine installation method
+if [ -d "bin" ]; then
+    # Local installation (from cloned repo)
+    echo "Installing from local directory..."
+    cp -v bin/* "$PREFIX/"
+else
+    # Remote installation (piped from curl)
+    echo "Downloading scripts from GitHub..."
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+
+    # Download all scripts
+    SCRIPTS=(
+        "claude-vault"
+        "claude-vault-get.sh"
+        "claude-vault-list.sh"
+        "claude-vault-register.sh"
+        "vault-login-simple.sh"
+        "vault-status.sh"
+        "vault-logout.sh"
+        "inject-secrets.sh"
+    )
+
+    for script in "${SCRIPTS[@]}"; do
+        echo "Downloading $script..."
+        curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH/bin/$script" -o "$TEMP_DIR/$script"
+    done
+
+    echo "Installing scripts..."
+    cp -v "$TEMP_DIR"/* "$PREFIX/"
+fi
 
 # Make executable
 echo "Setting permissions..."

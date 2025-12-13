@@ -14,9 +14,25 @@ Session-based CLI for HashiCorp Vault with AI assistant integration.
 ## Quick Start
 
 ### Installation
+
+**Quick install from GitHub (recommended):**
 ```bash
-cd ./claude-vault
+curl -fsSL https://raw.githubusercontent.com/weber8thomas/claude-vault/main/install.sh | sudo bash
+```
+
+**Or clone and install manually:**
+```bash
+git clone https://github.com/weber8thomas/claude-vault.git
+cd claude-vault
 sudo ./install.sh
+```
+
+**User-local installation (no sudo):**
+```bash
+git clone https://github.com/weber8thomas/claude-vault.git
+cd claude-vault
+PREFIX="$HOME/.local/bin" ./install.sh
+# Add to PATH: echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
 ### Authentication
