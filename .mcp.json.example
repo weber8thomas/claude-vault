@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "mcp-vault": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "/path/to/claude-vault/mcp_vault",
+        "mcp-vault"
+      ],
+      "env": {
+        "VAULT_ADDR": "https://vault.example.com"
+      }
+    }
+  }
+}

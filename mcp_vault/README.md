@@ -31,7 +31,7 @@ User authenticates → VAULT_TOKEN exported → MCP server reads env → Claude 
 ### 1. Installation
 
 ```bash
-cd /workspace/proxmox-services/mcp-vault
+cd /path/to/claude-vault/mcp_vault
 
 # Install in development mode
 pip install -e .
@@ -42,24 +42,55 @@ pip install mcp-vault
 
 ### 2. Configure MCP Server (One-time)
 
-The MCP server is already configured in this repository via `.mcp.json` (project scope):
+**Option 1: Use .mcp.json (Project Scope - Recommended)**
+
+Copy the example configuration:
 
 ```bash
-# Verify MCP server is configured
+# Copy example to your project root
+cp .mcp.json.example /your/project/.mcp.json
+
+# Edit to set your Vault address
+vim /your/project/.mcp.json
+```
+
+Edit `.mcp.json` to point to your claude-vault installation:
+
+```json
+{
+  "mcpServers": {
+    "mcp-vault": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "/path/to/claude-vault/mcp_vault",
+        "mcp-vault"
+      ],
+      "env": {
+        "VAULT_ADDR": "https://vault.example.com"
+      }
+    }
+  }
+}
+```
+
+**Option 2: Add via Claude CLI**
+
+```bash
+# Add MCP server with project scope
+claude mcp add --transport stdio mcp-vault --scope project \
+  --env VAULT_ADDR=https://vault.example.com \
+  -- uvx --from /path/to/claude-vault/mcp_vault mcp-vault
+```
+
+**Verify Configuration:**
+
+```bash
+# Check MCP server status
 claude mcp get mcp-vault
 
 # Should show: Status: ✓ Connected
-```
-
-**For new team members or fresh installs:**
-
-```bash
-cd /workspace/proxmox-services
-
-# Add MCP server with project scope
-claude mcp add --transport stdio mcp-vault --scope project \
-  --env VAULT_ADDR=https://vault.laboiteaframboises.duckdns.org \
-  -- uvx --from /workspace/proxmox-services/mcp-vault mcp-vault
 ```
 
 ### 3. Authenticate to Vault (Daily)
