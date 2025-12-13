@@ -1,0 +1,21 @@
+[project]
+name = "mcp-vault"
+version = "1.0.0"
+description = "MCP server for HashiCorp Vault secret management via claude-vault"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.1.0",
+    "requests>=2.32.3",
+    "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+mcp-vault = "mcp_vault:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_vault"]

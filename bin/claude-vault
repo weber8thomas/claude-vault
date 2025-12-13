@@ -1,0 +1,228 @@
+#!/bin/bash
+# Claude Vault - Unified interface for Vault operations (agentic use)
+# Usage: claude-vault <command> [options]
+
+# Only set -e if being executed (not sourced)
+# When sourced, set -e can kill the user's terminal on errors
+if [ "$0" = "$BASH_SOURCE" ]; then
+    set -e
+fi
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Get script directory (works in both bash and zsh)
+if [ -n "$BASH_SOURCE" ]; then
+    # Bash
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [ -n "$ZSH_VERSION" ]; then
+    # Zsh
+    SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+else
+    # Fallback
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
+
+# Version
+VERSION="1.0.0"
+
+# Help text
+show_help() {
+    cat << EOF
+${BLUE}Claude Vault${NC} - Unified interface for HashiCorp Vault operations
+Version: $VERSION
+
+${CYAN}USAGE:${NC}
+    claude-vault <command> [options]
+
+${CYAN}AUTHENTICATION:${NC}
+    ${GREEN}login${NC}                  Authenticate via OIDC (opens browser)
+    ${GREEN}status${NC}                 Check current session status
+    ${GREEN}logout${NC}                 Revoke token and clear session
+
+${CYAN}SECRET OPERATIONS:${NC}
+    ${GREEN}list${NC} [service]         List all services or secrets for a service
+    ${GREEN}get${NC} <service> [key]    Get secret value(s) for a service
+    ${GREEN}set${NC} <service> k=v...   Register/update secrets (requires confirmation)
+    ${GREEN}inject${NC} <service>       Inject secrets from Vault to .env file
+
+${CYAN}OPTIONS:${NC}
+    --dry-run              Preview changes without writing (for 'set' command)
+    --no-confirm           Skip confirmation (NOT RECOMMENDED for AI usage)
+    -h, --help             Show this help message
+    -v, --version          Show version
+
+${CYAN}EXAMPLES:${NC}
+    # Authentication
+    ${YELLOW}claude-vault login${NC}                          # Authenticate via browser
+    ${YELLOW}claude-vault status${NC}                         # Check session
+
+    # List secrets
+    ${YELLOW}claude-vault list${NC}                           # List all services
+    ${YELLOW}claude-vault list esphome${NC}                   # List esphome secret keys
+
+    # Get secret values
+    ${YELLOW}claude-vault get esphome${NC}                    # Get all esphome secrets
+    ${YELLOW}claude-vault get esphome wifi_ssid${NC}          # Get specific secret
+
+    # Register secrets (requires human confirmation)
+    ${YELLOW}claude-vault set myapp KEY="value"${NC}           # Register new secret
+    ${YELLOW}claude-vault set --dry-run myapp KEY="val"${NC}   # Preview only
+
+    # Inject to service
+    ${YELLOW}claude-vault inject authentik${NC}               # Vault → .env file
+
+${CYAN}DOCUMENTATION:${NC}
+    Quick Start: docs/VAULT_QUICK_START.md
+    Security:    docs/CLAUDE_VAULT_SECURITY.md
+    Full Guide:  docs/CLAUDE_VAULT_SETUP.md
+
+${CYAN}SESSION INFO:${NC}
+    Sessions expire after 60 minutes
+    Human must authenticate via OIDC + MFA
+    All write operations require confirmation
+    Operations logged to: .claude-vault-audit.log
+
+EOF
+}
+
+# Version info
+show_version() {
+    echo "Claude Vault v$VERSION"
+}
+
+# Check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Main command dispatcher
+main() {
+    # Parse global options
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -v|--version)
+                show_version
+                exit 0
+                ;;
+            -*)
+                echo -e "${RED}Unknown option: $1${NC}"
+                echo "Run 'claude-vault --help' for usage information"
+                exit 1
+                ;;
+            *)
+                break
+                ;;
+        esac
+        shift
+    done
+
+    # Get command
+    COMMAND="${1:-}"
+
+    if [ -z "$COMMAND" ]; then
+        echo -e "${RED}Error: No command specified${NC}"
+        echo ""
+        echo "Run 'claude-vault --help' for usage information"
+        exit 1
+    fi
+
+    shift # Remove command from args
+
+    # Dispatch to subcommand
+    case "$COMMAND" in
+        login)
+            # Source the login script to export variables
+            if [ "$0" != "$BASH_SOURCE" ]; then
+                # Script is sourced
+                source "$SCRIPT_DIR/vault-login-simple.sh" "$@"
+            else
+                # Script is executed
+                echo -e "${YELLOW}💡 Tip: Run with 'source' to export variables to your shell:${NC}"
+                echo -e "  ${CYAN}source claude-vault login${NC}"
+                echo ""
+                bash "$SCRIPT_DIR/vault-login-simple.sh" "$@"
+            fi
+            ;;
+
+        status)
+            "$SCRIPT_DIR/vault-status.sh" "$@"
+            ;;
+
+        logout)
+            if [ "$0" != "$BASH_SOURCE" ]; then
+                # Script is sourced
+                source "$SCRIPT_DIR/vault-logout.sh" "$@"
+            else
+                # Script is executed
+                echo -e "${YELLOW}💡 Tip: Run with 'source' to clear variables from your shell:${NC}"
+                echo -e "  ${CYAN}source claude-vault logout${NC}"
+                echo ""
+                bash "$SCRIPT_DIR/vault-logout.sh" "$@"
+            fi
+            ;;
+
+        list|ls)
+            "$SCRIPT_DIR/claude-vault-list.sh" "$@"
+            ;;
+
+        get|show)
+            if [ $# -eq 0 ]; then
+                echo -e "${RED}Error: Service name required${NC}"
+                echo "Usage: claude-vault get <service> [key]"
+                exit 1
+            fi
+            "$SCRIPT_DIR/claude-vault-get.sh" "$@"
+            ;;
+
+        set|register|put)
+            if [ $# -eq 0 ]; then
+                echo -e "${RED}Error: Service name required${NC}"
+                echo "Usage: claude-vault set <service> key=value [key2=value2...]"
+                echo "       claude-vault set --dry-run <service> key=value"
+                exit 1
+            fi
+            "$SCRIPT_DIR/claude-vault-register.sh" "$@"
+            ;;
+
+        inject)
+            if [ $# -eq 0 ]; then
+                echo -e "${RED}Error: Service name required${NC}"
+                echo "Usage: claude-vault inject <service>"
+                exit 1
+            fi
+            "$SCRIPT_DIR/inject-secrets.sh" "$@"
+            ;;
+
+        help)
+            show_help
+            ;;
+
+        *)
+            echo -e "${RED}Unknown command: $COMMAND${NC}"
+            echo ""
+            echo "Run 'claude-vault --help' for available commands"
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function only if script is executed (not sourced)
+# When sourced, bash has $0 != $BASH_SOURCE
+if [ "$0" = "$BASH_SOURCE" ]; then
+    # Script is being executed
+    main "$@"
+else
+    # Script is being sourced - call main but handle the return properly
+    # This prevents the pop_var_context error
+    main "$@" || true
+fi
