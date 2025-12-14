@@ -156,6 +156,20 @@ class ApprovalServer:
     def _setup_routes(self):
         """Setup FastAPI routes."""
 
+        @self.app.get("/favicon.ico")
+        async def favicon():
+            """Serve favicon."""
+            # SVG favicon with vault/lock icon
+            svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <rect width="100" height="100" rx="20" fill="#667eea"/>
+                <path d="M50 25 L50 35 M35 45 L35 55 Q35 75 50 75 Q65 75 65 55 L65 45 Z"
+                      stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round"/>
+                <rect x="30" y="45" width="40" height="30" rx="5" fill="#fff"/>
+                <circle cx="50" cy="60" r="4" fill="#667eea"/>
+                <rect x="48" y="60" width="4" height="8" fill="#667eea"/>
+            </svg>"""
+            return HTMLResponse(content=svg, media_type="image/svg+xml")
+
         @self.app.get("/")
         async def index():
             """Server status page."""
