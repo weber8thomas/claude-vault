@@ -8,10 +8,14 @@ dependencies = [
     "mcp>=1.1.0",
     "requests>=2.32.3",
     "python-dotenv>=1.0.1",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "webauthn>=2.0.0",
 ]
 
 [project.scripts]
 mcp-vault = "mcp_vault:run"
+vault-approve-server = "mcp_vault.approval_server:main"
 
 [build-system]
 requires = ["hatchling"]

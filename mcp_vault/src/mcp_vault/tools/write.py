@@ -7,7 +7,8 @@ from mcp.types import Tool, TextContent
 from ..tools import ToolHandler
 from ..session import VaultSession
 from ..vault_client import VaultClient
-from ..security import SecurityValidator, ValidationError, ConfirmationPrompt, AuditLogger
+from ..security import SecurityValidator, ValidationError, AuditLogger
+from ..approval_server import get_approval_server
 
 
 class VaultSetTool(ToolHandler):
@@ -22,15 +23,34 @@ class VaultSetTool(ToolHandler):
             name=self.name,
             description="""Create or update secrets in Vault for a service.
 
-⚠️ SECURITY: This operation REQUIRES human confirmation. The tool will:
-1. Validate all inputs (service name, keys, values)
-2. Check for dangerous patterns (command injection, etc.)
-3. Show a preview of changes
-4. Prompt the user to type 'yes' to confirm
-5. Write to audit log
+⚠️ SECURITY: WebAuthn approval workflow required:
 
-The confirmation prompt will be displayed to the user and Claude MUST wait for the response.
-DO NOT attempt to automatically confirm - this is a critical security checkpoint.""",
+PHASE 1 - Create Pending Operation:
+  Call vault_set WITHOUT approval_token:
+  - Validates all inputs (service name, keys, values)
+  - Checks for dangerous patterns (command injection, etc.)
+  - Creates pending operation in approval server
+  - Returns approval URL (http://localhost:8091/approve/{op_id})
+
+PHASE 2 - User Approves (Out of Band):
+  User opens the approval URL in browser:
+  - Reviews operation details (service, secrets, warnings)
+  - Clicks "Approve with WebAuthn"
+  - Authenticates using TouchID/Windows Hello/YubiKey
+  - Server stores approval
+
+PHASE 3 - Execute:
+  Call vault_set WITH approval_token="{op_id}":
+  - Verifies WebAuthn approval exists
+  - Writes secrets to Vault
+  - Logs to audit trail
+
+Claude Code MUST:
+1. First call without approval_token
+2. Show approval URL to user
+3. Wait for user to complete WebAuthn authentication
+4. Only call with approval_token after user confirms
+5. NEVER skip WebAuthn approval""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -49,6 +69,10 @@ DO NOT attempt to automatically confirm - this is a critical security checkpoint
                         "type": "boolean",
                         "description": "If true, show preview without writing to Vault",
                         "default": False
+                    },
+                    "approval_token": {
+                        "type": "string",
+                        "description": "Approval token from WebAuthn authentication. Only provide after user has approved via the web UI.",
                     }
                 },
                 "required": ["service", "secrets"]
@@ -69,6 +93,7 @@ DO NOT attempt to automatically confirm - this is a critical security checkpoint
         service = arguments.get('service')
         secrets = arguments.get('secrets', {})
         dry_run = arguments.get('dry_run', False)
+        approval_token = arguments.get('approval_token')
 
         # Validate service name
         try:
@@ -153,29 +178,56 @@ DO NOT attempt to automatically confirm - this is a critical security checkpoint
 To actually write these secrets, call vault_set without dry_run=true."""
             )]
 
-        # SECURITY CHECKPOINT: Require human confirmation
-        self.audit_logger.log("CONFIRMATION_REQUIRED", service, f"{action} with {len(secrets)} secrets")
+        # SECURITY CHECKPOINT: Require WebAuthn approval
+        if not approval_token:
+            # Create pending operation and get approval server
+            approval_server = get_approval_server()
+            op_id, approval_url = approval_server.create_pending_operation(
+                service=service,
+                action=action,
+                secrets=merged_secrets,
+                warnings=all_warnings if all_warnings else None
+            )
 
-        confirmed = ConfirmationPrompt.prompt_user(
-            service=service,
-            action=action,
-            secrets=merged_secrets,
-            warnings=all_warnings if all_warnings else None
-        )
+            self.audit_logger.log("CONFIRMATION_REQUIRED", service, f"{action} with {len(secrets)} secrets, op_id={op_id}")
 
-        if not confirmed:
-            self.audit_logger.log("ABORTED", service, "User declined confirmation")
             return [TextContent(
                 type="text",
-                text=f"""❌ Operation aborted by user.
+                text=f"""{preview_text}
 
-{preview_text}
+⚠️  SECURITY CHECKPOINT - WEBAUTHN APPROVAL REQUIRED
 
-No changes were made to Vault."""
+This operation requires WebAuthn authentication (TouchID, Windows Hello, or YubiKey).
+
+To approve:
+  1. Open in browser: {approval_url}
+  2. Review the operation details
+  3. Click "Approve with WebAuthn"
+  4. Authenticate with your device
+
+After approval, call vault_set again with:
+  vault_set(service="{service}", secrets={{...}}, approval_token="{op_id}")
+
+Operation expires in 5 minutes."""
             )]
 
-        # User confirmed - proceed with write
-        self.audit_logger.log("CONFIRMED", service, f"User confirmed {action}")
+        # Check approval
+        approval_server = get_approval_server()
+
+        if not approval_server.is_approved(approval_token):
+            return [TextContent(
+                type="text",
+                text=f"""❌ Operation not approved
+
+Approval token: {approval_token}
+
+Please open: {approval_server.origin}/approve/{approval_token}
+
+And complete WebAuthn authentication to approve this operation."""
+            )]
+
+        # User confirmed via WebAuthn - proceed with write
+        self.audit_logger.log("CONFIRMED", service, f"User confirmed {action} via WebAuthn, token={approval_token}")
 
         write_response = client.write_secret(service, merged_secrets)
 
@@ -188,7 +240,9 @@ No changes were made to Vault."""
 {preview_text}"""
             )]
 
-        # Success!
+        # Success! Clean up pending operation
+        approval_server.cleanup_operation(approval_token)
+
         version = write_response.data.get('version', 'N/A')
         keys_written = ', '.join(secrets.keys())
         self.audit_logger.log("SUCCESS", service, f"{action} version={version} keys={keys_written}")
