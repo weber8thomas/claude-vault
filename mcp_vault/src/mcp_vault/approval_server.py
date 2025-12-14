@@ -181,6 +181,7 @@ class ApprovalServer:
 <head>
     <title>Claude-Vault Approval Server</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico">
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
@@ -795,6 +796,7 @@ class ApprovalServer:
 <head>
     <title>Register Authenticator - Claude-Vault Approval</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -1106,6 +1108,7 @@ class ApprovalServer:
 <head>
     <title>Approve Claude-Vault Operation - {op.service}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico">
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
