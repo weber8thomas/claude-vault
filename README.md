@@ -169,11 +169,25 @@ claude-vault inject authentik      # Inject to .env file
   </tr>
 </table>
 
+## Security Considerations
+
+**AI can read secrets** - This is necessary for migration workflows. AI helps you:
+- Migrate from docker-compose/.env files to Vault
+- Generate .env files from Vault secrets
+- Organize and structure your secrets
+
+**AI cannot write secrets** - WebAuthn approval required for all write operations.
+
+**For ultra-sensitive production secrets:**
+- Use the CLI directly without AI assistance
+- Use a hybrid approach (AI for structure, manual for values)
+- See [Security FAQ](packages/mcp-server/WEBAUTHN_SETUP.md#security-faq) for details
+
 ## Documentation
 
 ### MCP Server
 - [MCP Integration](docs/MCP.md) - Model Context Protocol server setup
-- [WebAuthn Setup](packages/mcp-server/WEBAUTHN_SETUP.md) - Security architecture details
+- [WebAuthn Setup](packages/mcp-server/WEBAUTHN_SETUP.md) - Security architecture & FAQ
 - [MCP Server README](packages/mcp-server/README.md) - MCP package details
 
 ### CLI Tool

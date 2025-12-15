@@ -1,5 +1,6 @@
 """Injection tool: vault_inject to generate .env or secrets.yaml files."""
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Sequence
@@ -8,7 +9,9 @@ from mcp.types import TextContent, Tool
 
 from ..security import SecurityValidator, ValidationError
 from ..session import VaultSession
+from ..tokenization import get_token_vault
 from ..tools import ToolHandler
+from ..vault_client import VaultClient
 
 
 class VaultInjectTool(ToolHandler):
@@ -22,14 +25,21 @@ class VaultInjectTool(ToolHandler):
             name=self.name,
             description="""Inject secrets from Vault into local configuration files (.env or secrets.yaml).
 
-This reads secrets from Vault and generates:
+This reads secrets from Vault and generates configuration files with actual values:
 - .env file for services using environment variables
 - config/secrets.yaml for services using YAML configuration (e.g., ESPHome)
 
-The file format is auto-detected from the service directory structure, or can be specified.
-Existing files are backed up with timestamp before being replaced.
+**Tokenization support:**
+- If VAULT_SECURITY_MODE=tokenized, this tool automatically resolves all @token-xxx references
+- Secret values are detokenized locally (never sent to Claude API)
+- Final .env file contains plaintext values for the service to use
 
-This tool calls the existing inject-secrets.sh script which handles the template generation.""",
+**File handling:**
+- Format auto-detected from service directory structure, or can be specified
+- Existing files are backed up with timestamp before being replaced
+- Generated files should be in .gitignore (DO NOT COMMIT)
+
+**Security:** This is the only tool that writes plaintext secrets to disk. All detokenization happens locally on your machine.""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -62,6 +72,7 @@ This tool calls the existing inject-secrets.sh script which handles the template
 
         service = arguments.get("service")
         format_type = arguments.get("format", "auto")
+        template = arguments.get("template")  # Optional: AI-provided template with tokens
 
         # Validate service name
         try:
@@ -69,6 +80,11 @@ This tool calls the existing inject-secrets.sh script which handles the template
         except ValidationError as e:
             return [TextContent(type="text", text=f"❌ Invalid service name: {e}")]
 
+        # If AI provided a template with tokens, use it directly
+        if template:
+            return self._inject_from_template(service, template, format_type)
+
+        # Otherwise, use the legacy inject script
         # Find the inject-secrets.sh script
         script_path = Path("/workspace/proxmox-services/scripts/inject-secrets.sh")
 
@@ -185,5 +201,110 @@ This may indicate an issue with the inject-secrets.sh script or environment.
 Manual fallback:
 1. Get secrets: vault_get with service='{service}'
 2. Create configuration file manually""",
+                )
+            ]
+
+    def _inject_from_template(
+        self, service: str, template: str, format_type: str
+    ) -> Sequence[TextContent]:
+        """
+        Inject secrets using an AI-provided template (with tokens).
+
+        Args:
+            service: Service name
+            template: Template content (may contain @token-xxx references)
+            format_type: Output format (env/yaml/auto)
+
+        Returns:
+            Result message
+        """
+        # Detokenize the template
+        security_mode = os.getenv("VAULT_SECURITY_MODE", "tokenized")
+
+        if security_mode == "tokenized":
+            try:
+                vault = get_token_vault()
+                detokenized_content = vault.detokenize_text(template)
+                tokens_resolved = template.count("@token-")
+            except ValueError as e:
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"""❌ Token resolution failed: {str(e)}
+
+This may mean:
+- Token session expired (restart MCP server)
+- Unknown token in template
+- Template contains invalid token format""",
+                    )
+                ]
+        else:
+            # No tokenization, use template as-is
+            detokenized_content = template
+            tokens_resolved = 0
+
+        # Determine output path
+        if format_type == "yaml":
+            output_path = f"{service}/config/secrets.yaml"
+        else:  # env or auto
+            output_path = f"{service}/.env"
+
+        # Write the file
+        try:
+            output_file = Path(output_path)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Backup existing file if it exists
+            if output_file.exists():
+                import shutil
+                from datetime import datetime
+
+                backup_path = f"{output_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                shutil.copy2(output_file, backup_path)
+                backed_up = True
+            else:
+                backed_up = False
+
+            # Write new content
+            output_file.write_text(detokenized_content)
+
+            return [
+                TextContent(
+                    type="text",
+                    text=f"""✅ Generated {output_path}
+
+**Summary:**
+- Tokens resolved: {tokens_resolved}
+- Security mode: {security_mode}
+- File backed up: {"Yes" if backed_up else "No (new file)"}
+- Lines written: {len(detokenized_content.splitlines())}
+
+⚠️  File contains sensitive data:
+- Do not commit to git
+- Verify .gitignore includes {output_path.split('/')[-1]}
+- Secrets written in plaintext for service use
+
+**Next steps:**
+1. Review the generated file
+2. Restart the {service} service to load new configuration
+3. Verify service is working correctly""",
+                )
+            ]
+
+        except Exception as e:
+            return [
+                TextContent(
+                    type="text",
+                    text=f"""❌ Failed to write file: {str(e)}
+
+**Possible causes:**
+- Permission denied writing to {output_path}
+- Service directory doesn't exist
+- Disk space issues
+
+**To debug:**
+1. Check directory exists: ls -la {service}/
+2. Check permissions: ls -la {output_path}
+3. Manually create: mkdir -p {service}/config/""",
                 )
             ]

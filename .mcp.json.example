@@ -9,8 +9,42 @@
         "claude-vault-mcp"
       ],
       "env": {
-        "VAULT_ADDR": "https://vault.example.com"
+        "VAULT_ADDR": "https://vault.example.com",
+        "VAULT_SECURITY_MODE": "tokenized",
+        "VAULT_TOKEN_SESSION_TTL": "7200"
       }
     }
   }
 }
+
+// Security Modes:
+//
+// VAULT_SECURITY_MODE (default: "tokenized")
+// ────────────────────────────────────────────
+//
+// "tokenized" (RECOMMENDED - Default)
+// - AI sees: API_KEY: @token-a8f3d9e1b2c4f7a9
+// - Secret values replaced with temporary session tokens
+// - Tokens valid for 2h (configurable via VAULT_TOKEN_SESSION_TTL)
+// - Actual values never sent to Claude API
+// - vault_inject resolves tokens locally when writing .env files
+// - Best for: Production secrets, security-conscious workflows
+//
+// "redacted"
+// - AI sees: API_KEY: <REDACTED>
+// - Shows only secret key names, not values
+// - Less flexible than tokenized mode (AI can't help as much)
+// - Best for: Maximum paranoia, minimal AI assistance
+//
+// "plaintext" (⚠️ INSECURE)
+// - AI sees: API_KEY: sk-1234567890abcdef
+// - Actual secret values sent to Claude API
+// - Use ONLY for non-sensitive dev/staging environments
+// - Best for: Testing, non-production use
+//
+// VAULT_TOKEN_SESSION_TTL (default: "7200")
+// ────────────────────────────────────────────
+// Session lifetime in seconds before tokens expire
+// - Default: 7200 (2 hours)
+// - Recommended: 3600-14400 (1-4 hours)
+// - Maximum: 86400 (24 hours)

@@ -1,6 +1,7 @@
 """Read-only Vault tools: vault_status, vault_list, vault_get."""
 
 import json
+import os
 import time
 from typing import Sequence
 
@@ -8,6 +9,7 @@ from mcp.types import TextContent, Tool
 
 from ..security import SecurityValidator, ValidationError
 from ..session import VaultSession
+from ..tokenization import get_token_vault, should_tokenize_value
 from ..tools import ToolHandler
 from ..vault_client import VaultClient
 
@@ -237,13 +239,38 @@ class VaultGetTool(ToolHandler):
         super().__init__("vault_get")
 
     def get_tool_description(self) -> Tool:
-        return Tool(
-            name=self.name,
-            description="""Retrieve secret values from Vault for a specific service.
+        security_mode = os.getenv("VAULT_SECURITY_MODE", "tokenized")
+
+        if security_mode == "tokenized":
+            description = """Retrieve secrets from Vault with values TOKENIZED for security.
+- Returns secret keys with values replaced by temporary tokens (@token-xxx)
+- Tokens are valid only for this session (2h default)
+- Secret values never sent to Claude API
+- Use vault_inject to generate .env files (tokens resolved locally)
+
+Example:
+  vault_get jellyfin
+  → API_KEY: @token-a8f3d9e1b2c4f7a9
+  → DB_PASSWORD: @token-b2c4f7a9c5d6e8f9
+
+This allows AI to help with structure without exposing credentials."""
+        elif security_mode == "redacted":
+            description = """Retrieve secret KEYS (not values) from Vault for a specific service.
+- Returns secret key names with values shown as <REDACTED>
+- Secret values never sent to AI (security feature)
+- Use vault_inject to generate .env files with actual values
+
+This tool helps you understand secret structure without exposing credentials."""
+        else:  # plaintext
+            description = """Retrieve secret values from Vault for a specific service.
 - Without key: Returns all secrets for the service
 - With key: Returns only the specified secret value
 
-⚠️ WARNING: This returns actual secret values. Use with caution.""",
+⚠️ WARNING: This returns actual secret values to AI. Use with caution."""
+
+        return Tool(
+            name=self.name,
+            description=description,
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -292,6 +319,9 @@ class VaultGetTool(ToolHandler):
 
         secrets = response.data["secrets"]
 
+        # Check security mode (default: tokenized)
+        security_mode = os.getenv("VAULT_SECURITY_MODE", "tokenized")
+
         if key:
             # Return specific key
             if key not in secrets:
@@ -305,24 +335,145 @@ Available keys: {available_keys}""",
                     )
                 ]
 
-            return [
-                TextContent(
-                    type="text",
-                    text=f"""🔐 Secret value for {service}/{key}:
+            value = secrets[key]
+
+            if security_mode == "tokenized":
+                # Tokenize the value
+                vault = get_token_vault()
+                if should_tokenize_value(key, value):
+                    token = vault.tokenize(
+                        value, metadata={"service": service, "key": key, "type": "vault_secret"}
+                    )
+                    display_value = token
+                else:
+                    # Non-sensitive value, send as-is
+                    display_value = value
+
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"""🔐 Secret: {service}/{key}
+
+Value: {display_value}
+
+ℹ️  Tokenization: {"Active" if display_value.startswith("@token-") else "Skipped (non-sensitive)"}
+
+**To use this secret:**
+- vault_inject: Generates .env file (token resolved locally)
+- Token valid for session: {vault.session_id}
+- Expires in: {vault.get_stats()['session_remaining_seconds']}s""",
+                    )
+                ]
+
+            elif security_mode == "redacted":
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"""🔐 Secret key: {service}/{key}
+
+Value: <REDACTED>
+
+ℹ️  Secret values are hidden for security. To use this secret:
+- Use vault_inject to generate .env file (values written locally)
+- Or change mode: VAULT_SECURITY_MODE=tokenized or plaintext""",
+                    )
+                ]
+
+            else:  # plaintext
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"""🔐 Secret value for {service}/{key}:
 
 ```
-{secrets[key]}
-```""",
-                )
-            ]
+{value}
+```
+
+⚠️  Value sent to Claude API in plaintext!""",
+                    )
+                ]
+
         else:
             # Return all secrets
-            secrets_formatted = "\n".join(f"  {k}: {v}" for k, v in secrets.items())
+            if security_mode == "tokenized":
+                # Tokenize all values
+                vault = get_token_vault()
+                tokenized = {}
+                stats = {"tokenized": 0, "plaintext": 0}
 
-            return [
-                TextContent(
-                    type="text",
-                    text=f"""⚠️ WARNING: Displaying secret values!
+                for k, v in secrets.items():
+                    if should_tokenize_value(k, v):
+                        tokenized[k] = vault.tokenize(
+                            v, metadata={"service": service, "key": k, "type": "vault_secret"}
+                        )
+                        stats["tokenized"] += 1
+                    else:
+                        tokenized[k] = v
+                        stats["plaintext"] += 1
+
+                secrets_formatted = "\n".join(f"  {k}: {v}" for k, v in tokenized.items())
+
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"""🔐 Secrets for service: {service} ({len(secrets)} total)
+
+```
+{secrets_formatted}
+```
+
+ℹ️  Tokenization active - secret values protected
+
+**Statistics:**
+- Tokenized: {stats['tokenized']} secrets
+- Plaintext: {stats['plaintext']} (non-sensitive config)
+- Session: {vault.session_id}
+- Expires in: {vault.get_stats()['session_remaining_seconds']}s
+
+**To use these secrets:**
+- vault_inject: Generates .env file (all tokens resolved locally)
+
+**AI can help with:**
+- Understanding secret structure
+- Creating migration plans
+- Organizing services
+- Generating configuration templates""",
+                    )
+                ]
+
+            elif security_mode == "redacted":
+                # Show keys only, redact values
+                secrets_formatted = "\n".join(f"  {k}: <REDACTED>" for k in secrets.keys())
+
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"""🔐 Secret keys for service: {service} ({len(secrets)} secrets)
+
+```
+{secrets_formatted}
+```
+
+ℹ️  Secret values are hidden for security.
+
+**To use these secrets:**
+- vault_inject: Generate .env file (values written locally, never sent to AI)
+
+**AI can help with:**
+- Understanding what secrets exist
+- Organizing secret structure
+- Creating migration plans
+- Generating .env templates""",
+                    )
+                ]
+
+            else:  # plaintext
+                secrets_formatted = "\n".join(f"  {k}: {v}" for k, v in secrets.items())
+
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"""⚠️ WARNING: Displaying secret values!
 
 🔐 Secrets for service: {service}
 
@@ -330,6 +481,9 @@ Available keys: {available_keys}""",
 {secrets_formatted}
 ```
 
-Total: {len(secrets)} secrets""",
-                )
-            ]
+Total: {len(secrets)} secrets
+
+⚠️  All values sent to Claude API in plaintext!
+Consider using VAULT_SECURITY_MODE=tokenized for better security.""",
+                    )
+                ]
