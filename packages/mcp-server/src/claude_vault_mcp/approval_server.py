@@ -1872,13 +1872,14 @@ class ApprovalServer:
             border-radius: 4px;
             color: #495057;
             cursor: help;
-            transition: background-color 0.2s;
+            transition: all 0.1s;
             display: inline-block;
             max-width: 100%;
         }}
         .secret-value code:hover {{
             background: #dee2e6;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
         }}
         .button-group {{
             display: flex;
