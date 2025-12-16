@@ -1953,14 +1953,34 @@ class ApprovalServer:
                             The secrets have been approved and written to
                             Claude-Vault.
                         </p>
+                        <p style="margin-top: 10px; font-size: 0.9em; color: #6c757d;">
+                            Operation ID: <code style="background: #e9ecef;
+                                                       padding: 2px 6px;
+                                                       border-radius: 3px;">${{opId}}</code>
+                        </p>
+                        <p style="margin-top: 15px; font-size: 0.95em;">
+                            Redirecting to home in <span id="countdown">3</span> seconds...
+                        </p>
                         <p style="margin-top: 10px;">
                             <a href="/"
                                style="color: #155724; font-weight: 600;
                                       text-decoration: underline;">
-                                ← Return to home
+                                ← Return to home now
                             </a>
                         </p>
                     `;
+
+                    // Automatic redirect after 3 seconds
+                    let countdown = 3;
+                    const countdownEl = document.getElementById('countdown');
+                    const redirectTimer = setInterval(() => {{
+                        countdown--;
+                        if (countdownEl) countdownEl.textContent = countdown;
+                        if (countdown <= 0) {{
+                            clearInterval(redirectTimer);
+                            window.location.href = '/';
+                        }}
+                    }}, 1000);
                 }} else {{
                     throw new Error(result.message || 'Approval failed');
                 }}
