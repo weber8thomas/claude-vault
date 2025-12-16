@@ -39,3 +39,4 @@ htmlcov/
 
 # Logs
 *.log
+test_tokenization*.py

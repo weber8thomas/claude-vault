@@ -1,6 +1,15 @@
 #!/bin/bash
 # Simplified Vault Login - Direct token input
 # Usage: source ./scripts/vault-login-simple.sh
+#
+# Configuration:
+#   VAULT_ADDR            - Vault server URL (required)
+#   VAULT_MAX_TOKEN_TTL   - Maximum token lifetime in seconds (default: 3600 = 60 minutes)
+#
+# Examples:
+#   export VAULT_MAX_TOKEN_TTL=7200  # 2 hours
+#   export VAULT_MAX_TOKEN_TTL=10800 # 3 hours
+#   source claude-vault login
 
 # Colors
 RED='\033[0;31m'
@@ -95,10 +104,11 @@ if [ "$DISPLAY_NAME" = "unknown" ] || [ -z "$DISPLAY_NAME" ]; then
     return 1 2>/dev/null || exit 1
 fi
 
-# Calculate expiry (cap at 1 hour)
+# Calculate expiry (cap at configured max, default 1 hour)
+MAX_TOKEN_TTL="${VAULT_MAX_TOKEN_TTL:-3600}"  # Default: 60 minutes
 EXPIRY_SECONDS=$((TOKEN_TTL))
-if [ "$EXPIRY_SECONDS" -gt 3600 ]; then
-    EXPIRY_SECONDS=3600
+if [ "$EXPIRY_SECONDS" -gt "$MAX_TOKEN_TTL" ]; then
+    EXPIRY_SECONDS="$MAX_TOKEN_TTL"
 fi
 
 EXPIRY_TIME=$(($(date +%s) + EXPIRY_SECONDS))

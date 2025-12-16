@@ -1,13 +1,15 @@
 """Write tool: vault_set with security confirmation."""
 
 import json
-from typing import Dict, Sequence
+import os
+from typing import Sequence
 
 from mcp.types import TextContent, Tool
 
 from ..approval_server import get_approval_server
 from ..security import AuditLogger, SecurityValidator, ValidationError
 from ..session import VaultSession
+from ..tokenization import get_token_vault
 from ..tools import ToolHandler
 from ..vault_client import VaultClient
 
@@ -61,7 +63,10 @@ Claude Code MUST:
                     },
                     "secrets": {
                         "type": "object",
-                        "description": "Key-value pairs of secrets to register. Keys must be alphanumeric with dash/underscore.",
+                        "description": (
+                            "Key-value pairs of secrets to register. "
+                            "Keys must be alphanumeric with dash/underscore."
+                        ),
                         "additionalProperties": {"type": "string"},
                     },
                     "dry_run": {
@@ -71,7 +76,10 @@ Claude Code MUST:
                     },
                     "approval_token": {
                         "type": "string",
-                        "description": "Approval token from WebAuthn authentication. Only provide after user has approved via the web UI.",
+                        "description": (
+                            "Approval token from WebAuthn authentication. "
+                            "Only provide after user has approved via the web UI."
+                        ),
                     },
                 },
                 "required": ["service", "secrets"],
@@ -188,13 +196,42 @@ To actually write these secrets, call vault_set without dry_run=true.""",
 
         # SECURITY CHECKPOINT: Require WebAuthn approval
         if not approval_token:
+            # Detokenize secrets for approval UI display
+            # The approval UI is local-only, so it's safe to show real values
+            # This allows users to verify what they're approving
+            detokenized_secrets = {}
+            tokens_map = {}  # Maps key -> token for display
+
+            # Check if any values are tokens
+            has_tokens = any(
+                isinstance(v, str) and v.startswith("@token-") for v in merged_secrets.values()
+            )
+
+            if has_tokens:
+                token_vault = get_token_vault()
+                for key, value in merged_secrets.items():
+                    if isinstance(value, str) and value.startswith("@token-"):
+                        # Store the token for display
+                        tokens_map[key] = value
+                        # Detokenize the value
+                        try:
+                            detokenized_secrets[key] = token_vault.detokenize(value)
+                        except Exception as e:
+                            print(f"[VaultSet] Warning: Failed to detokenize {key}: {e}")
+                            detokenized_secrets[key] = value  # Keep token if failed
+                    else:
+                        detokenized_secrets[key] = value
+            else:
+                detokenized_secrets = merged_secrets
+
             # Create pending operation and get approval server
             approval_server = get_approval_server()
             op_id, approval_url = approval_server.create_pending_operation(
                 service=service,
                 action=action,
-                secrets=merged_secrets,
+                secrets=detokenized_secrets,  # Pass detokenized values
                 warnings=all_warnings if all_warnings else None,
+                tokens_map=tokens_map if tokens_map else None,  # Pass token mapping
             )
 
             self.audit_logger.log(
@@ -229,25 +266,47 @@ Operation expires in 5 minutes.""",
         approval_server = get_approval_server()
 
         if not approval_server.is_approved(approval_token):
-            return [
-                TextContent(
-                    type="text",
-                    text=f"""❌ Operation not approved
-
-Approval token: {approval_token}
-
-Please open: {approval_server.origin}/approve/{approval_token}
-
-And complete WebAuthn authentication to approve this operation.""",
-                )
-            ]
+            msg = (
+                "❌ Operation not approved\n\n"
+                "Approval token: {}\n\n"
+                "Please open: {}/approve/{}\n\n"
+                "And complete WebAuthn authentication to approve "
+                "this operation."
+            ).format(approval_token, approval_server.origin, approval_token)
+            return [TextContent(type="text", text=msg)]
 
         # User confirmed via WebAuthn - proceed with write
         self.audit_logger.log(
-            "CONFIRMED", service, f"User confirmed {action} via WebAuthn, token={approval_token}"
+            "CONFIRMED",
+            service,
+            "User confirmed {} via WebAuthn, token={}".format(action, approval_token),
         )
 
-        write_response = client.write_secret(service, merged_secrets)
+        # Detokenize if in tokenized mode
+        security_mode = os.getenv("VAULT_SECURITY_MODE", "tokenized")
+
+        if security_mode == "tokenized":
+            vault = get_token_vault()
+
+            # Detokenize all token values
+            detokenized_secrets = vault.detokenize_dict(merged_secrets)
+
+            # Count how many were detokenized
+            token_count = sum(
+                1 for v in merged_secrets.values() if isinstance(v, str) and v.startswith("@token-")
+            )
+
+            if token_count > 0:
+                self.audit_logger.log(
+                    "DETOKENIZATION",
+                    service,
+                    f"Detokenized {token_count} token(s) before writing to Vault",
+                )
+        else:
+            detokenized_secrets = merged_secrets
+
+        # Write detokenized secrets to Vault
+        write_response = client.write_secret(service, detokenized_secrets)
 
         if not write_response.success:
             self.audit_logger.log("FAILED", service, f"Write error: {write_response.error}")

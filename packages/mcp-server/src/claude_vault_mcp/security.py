@@ -1,6 +1,5 @@
 """Security validation, confirmation prompts, and audit logging."""
 
-import json
 import re
 import sys
 from datetime import datetime
@@ -111,6 +110,80 @@ class SecurityValidator:
         if len(value) > 8192:
             raise ValidationError("Secret value too long (max 8KB to prevent DoS)")
 
+    @staticmethod
+    def validate_file_path(path: str, service: str = None) -> None:
+        """
+        Validate file path is safe (no path traversal).
+
+        Args:
+            path: File path to validate
+            service: Optional service name for default directory
+
+        Raises:
+            ValidationError if path is unsafe
+        """
+        if not path:
+            raise ValidationError("File path cannot be empty")
+
+        # Resolve to absolute path
+        try:
+            abs_path = Path(path).resolve()
+        except Exception as e:
+            raise ValidationError(f"Invalid file path: {e}")
+
+        # Allowed base directories
+        allowed_dirs = [
+            Path("/workspace/proxmox-services"),
+            Path("/workspace/configs"),
+            Path("/mnt/proxmox-services"),  # Alternative mount point
+        ]
+
+        # Check if path is within allowed directories
+        is_allowed = False
+        for base_dir in allowed_dirs:
+            try:
+                # Check if abs_path is relative to base_dir
+                abs_path.relative_to(base_dir)
+                is_allowed = True
+                break
+            except ValueError:
+                # Not relative to this base dir, try next
+                continue
+
+        if not is_allowed:
+            raise ValidationError(
+                f"File path outside allowed directories: {path}\n"
+                f"Allowed directories: {', '.join(str(d) for d in allowed_dirs)}"
+            )
+
+        # Prevent symlink attacks
+        if abs_path.exists() and abs_path.is_symlink():
+            raise ValidationError("Symlinks not allowed for security reasons")
+
+    @staticmethod
+    def validate_file_size(file_path: str, max_size_mb: int = 5) -> None:
+        """
+        Validate file size to prevent DoS.
+
+        Args:
+            file_path: Path to file
+            max_size_mb: Maximum size in megabytes
+
+        Raises:
+            ValidationError if file too large
+        """
+        path = Path(file_path)
+
+        if not path.exists():
+            raise ValidationError(f"File not found: {file_path}")
+
+        size_bytes = path.stat().st_size
+        max_bytes = max_size_mb * 1024 * 1024
+
+        if size_bytes > max_bytes:
+            size_mb = size_bytes / 1024 / 1024
+            raise ValidationError(f"File too large: {size_mb:.1f}MB (max {max_size_mb}MB)")
+
 
 class ConfirmationPrompt:
     """Interactive confirmation for write operations."""
@@ -135,10 +208,10 @@ class ConfirmationPrompt:
         print("⚠️  SECURITY CHECKPOINT - MANUAL VALIDATION REQUIRED")
         print("=" * 70)
         print()
-        print(f"You are about to write secrets to Vault:")
-        print(f"  Service: {service}")
-        print(f"  Action: {action}")
-        print(f"  Path: secret/proxmox-services/{service}")
+        print("You are about to write secrets to Vault:")
+        print("  Service: {}".format(service))
+        print("  Action: {}".format(action))
+        print("  Path: secret/proxmox-services/{}".format(service))
         print()
 
         if warnings:
@@ -201,8 +274,8 @@ class AuditLogger:
             user: User/source of the action
         """
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-        log_entry = (
-            f"[{timestamp}] USER={user} ACTION={action} SERVICE={service} DETAILS={details}\n"
+        log_entry = "[{0}] USER={1} ACTION={2} SERVICE={3} DETAILS={4}\n".format(
+            timestamp, user, action, service, details
         )
 
         try:

@@ -35,12 +35,15 @@ class PendingOperation:
 
     op_id: str
     service: str
-    action: str  # CREATE or UPDATE
-    secrets: Dict[str, str]
+    action: str  # CREATE, UPDATE, SCAN_ENV, SCAN_COMPOSE
+    secrets: Dict[str, str]  # Detokenized values for display
     warnings: list
     created_at: float
     approved: bool = False
     approved_at: Optional[float] = None
+    scan_file_path: Optional[str] = None  # For scan operations
+    metadata: Optional[Dict] = None  # Additional metadata
+    tokens_map: Optional[Dict[str, str]] = None  # Maps secret_key -> token (for display)
 
 
 class ApprovalServer:
@@ -181,6 +184,37 @@ class ApprovalServer:
         async def index():
             """Server status page."""
             has_auth = len(self.credentials_db) > 0
+
+            # Generate status box HTML
+            if has_auth:
+                status_box = (
+                    '<div class="info-box success-box">'
+                    "<strong>✓ Setup Complete</strong><br>"
+                    "Your authenticator is registered and ready to approve "
+                    "operations.</div>"
+                )
+                auth_button = (
+                    '<a href="/register" class="action-button secondary">'
+                    "Manage Authenticators</a>"
+                )
+                reset_button = (
+                    '<button onclick="resetCredentials()" class="action-button" '
+                    'style="background: #dc3545; margin-top: 10px;">'
+                    "🗑️ Reset Authenticator</button>"
+                )
+            else:
+                status_box = (
+                    '<div class="info-box warning-box">'
+                    "<strong>⚠ Setup Required</strong><br>"
+                    "Register your authenticator (TouchID, Windows Hello, or "
+                    "YubiKey) before you can approve Claude-Vault operations."
+                    "</div>"
+                )
+                auth_button = (
+                    '<a href="/register" class="action-button">' "Register Authenticator</a>"
+                )
+                reset_button = ""
+
             return HTMLResponse(
                 f"""
 <!DOCTYPE html>
@@ -373,16 +407,18 @@ class ApprovalServer:
             </div>
         </div>
 
-        {'<div class="info-box success-box"><strong>✓ Setup Complete</strong><br>Your authenticator is registered and ready to approve operations.</div>' if has_auth else '<div class="info-box warning-box"><strong>⚠ Setup Required</strong><br>Register your authenticator (TouchID, Windows Hello, or YubiKey) before you can approve Claude-Vault operations.</div>'}
+        {status_box}
 
         <h2 style="margin-top: 30px;">Actions</h2>
 
-        {'<a href="/register" class="action-button secondary">Manage Authenticators</a>' if has_auth else '<a href="/register" class="action-button">Register Authenticator</a>'}
-        {f'<button onclick="resetCredentials()" class="action-button" style="background: #dc3545; margin-top: 10px;">🗑️ Reset Authenticator</button>' if has_auth else ''}
+        {auth_button}
+        {reset_button}
 
         <div class="info-box" style="margin-top: 30px;">
             <p><strong>How it works:</strong></p>
-            <p>When Claude Code needs to write secrets to Claude-Vault, you'll receive an approval URL. Open it in your browser, review the changes, and authenticate with your registered device to approve.</p>
+            <p>When Claude Code needs to write secrets to Claude-Vault, you'll receive an
+            approval URL. Open it in your browser, review the changes, and authenticate
+            with your registered device to approve.</p>
         </div>
     </div>
 
@@ -392,7 +428,10 @@ class ApprovalServer:
 
     <script>
         async function resetCredentials() {{
-            if (!confirm('⚠️ Are you sure you want to delete all registered authenticators?\\n\\nYou will need to re-register your device to approve vault operations.')) {{
+            if (!confirm(
+                '⚠️ Are you sure you want to delete all registered authenticators?\\n\\n'
+                + 'You will need to re-register your device to approve vault operations.'
+            )) {{
                 return;
             }}
 
@@ -577,7 +616,9 @@ class ApprovalServer:
 
                 return {
                     "success": True,
-                    "message": f"Operation approved! Claude-Vault write to '{op.service}' is now authorized.",
+                    "message": (
+                        "Operation approved! Claude-Vault write to '{}' " "is now authorized."
+                    ).format(op.service),
                 }
             except Exception as e:
                 raise HTTPException(400, f"Authentication failed: {e}")
@@ -599,10 +640,13 @@ class ApprovalServer:
                 self._save_credentials()
                 return {
                     "success": True,
-                    "message": "All authenticators have been deleted. You can now register a new device.",
+                    "message": (
+                        "All authenticators have been deleted. "
+                        "You can now register a new device."
+                    ),
                 }
             except Exception as e:
-                raise HTTPException(500, f"Failed to reset credentials: {e}")
+                raise HTTPException(500, "Failed to reset credentials: {}".format(e))
 
     def _get_registered_devices_html(self) -> str:
         """Generate HTML for registered devices section."""
@@ -682,7 +726,11 @@ class ApprovalServer:
             self.pending_ops.items(), key=lambda x: x[1].created_at, reverse=True
         ):
             age_seconds = int(now - op.created_at)
-            age_str = f"{age_seconds}s ago" if age_seconds < 60 else f"{age_seconds // 60}m ago"
+            age_str = (
+                "{}s ago".format(age_seconds)
+                if age_seconds < 60
+                else "{}m ago".format(age_seconds // 60)
+            )
 
             status_badge = (
                 '<span class="badge badge-success">Approved</span>'
@@ -691,16 +739,25 @@ class ApprovalServer:
             )
             action_badge_class = "badge-info" if op.action == "CREATE" else "badge-secondary"
 
-            ops_rows += f"""
+            ops_rows += """
             <tr>
-                <td><strong>{op.service}</strong></td>
-                <td><span class="badge {action_badge_class}">{op.action}</span></td>
-                <td>{len(op.secrets)} secret(s)</td>
-                <td>{status_badge}</td>
-                <td class="time-ago">{age_str}</td>
-                <td><a href="/approve/{op_id}" style="color: #667eea; text-decoration: none; font-weight: 600;">View →</a></td>
+                <td><strong>{}</strong></td>
+                <td><span class="badge {}">{}</span></td>
+                <td>{} secret(s)</td>
+                <td>{}</td>
+                <td class="time-ago">{}</td>
+                <td><a href="/approve/{}" style="color: #667eea; '
+                'text-decoration: none; font-weight: 600;">View →</a></td>
             </tr>
-            """
+            """.format(
+                op.service,
+                action_badge_class,
+                op.action,
+                len(op.secrets),
+                status_badge,
+                age_str,
+                op_id,
+            )
 
         return f"""
     <div class="card">
@@ -751,32 +808,35 @@ class ApprovalServer:
             ref_time = op.approved_at if op.approved_at else op.created_at
             age_seconds = int(now - ref_time)
             if age_seconds < 60:
-                age_str = f"{age_seconds}s ago"
+                age_str = "{}s ago".format(age_seconds)
             elif age_seconds < 3600:
-                age_str = f"{age_seconds // 60}m ago"
+                age_str = "{}m ago".format(age_seconds // 60)
             else:
-                age_str = f"{age_seconds // 3600}h ago"
+                age_str = "{}h ago".format(age_seconds // 3600)
 
             # Format timestamp
             completed_time = datetime.fromtimestamp(ref_time).strftime("%Y-%m-%d %H:%M")
 
             action_badge_class = "badge-info" if op.action == "CREATE" else "badge-secondary"
 
-            ops_rows += f"""
+            ops_rows += """
             <tr>
-                <td><strong>{op.service}</strong></td>
-                <td><span class="badge {action_badge_class}">{op.action}</span></td>
-                <td>{len(op.secrets)} secret(s)</td>
+                <td><strong>{}</strong></td>
+                <td><span class="badge {}">{}</span></td>
+                <td>{} secret(s)</td>
                 <td><span class="badge badge-success">Completed</span></td>
-                <td class="time-ago">{completed_time}</td>
-                <td class="time-ago">{age_str}</td>
+                <td class="time-ago">{}</td>
+                <td class="time-ago">{}</td>
             </tr>
-            """
+            """.format(
+                op.service, action_badge_class, op.action, len(op.secrets), completed_time, age_str
+            )
 
         return f"""
     <div class="card">
         <h2>📜 Operation History</h2>
-        <p style="color: #6c757d; margin-bottom: 15px;">Last 10 completed operations (kept for 24 hours)</p>
+        <p style="color: #6c757d; margin-bottom: 15px;">
+        Last 10 completed operations (kept for 24 hours)</p>
         <table class="list-table">
             <thead>
                 <tr>
@@ -807,7 +867,8 @@ class ApprovalServer:
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
             max-width: 700px;
             margin: 0 auto;
             padding: 40px 20px;
@@ -955,17 +1016,21 @@ class ApprovalServer:
 
         <div class="info-box">
             <p><strong>What is this?</strong></p>
-            <p>Register your device's biometric authentication (TouchID, Windows Hello, or hardware security key) to securely approve Claude-Vault write operations.</p>
+            <p>Register your device's biometric authentication (TouchID, Windows Hello,
+            or hardware security key) to securely approve Claude-Vault write operations.</p>
         </div>
 
         <div class="info-box">
             <p><strong>Supported authenticators:</strong></p>
-            <p>🍎 TouchID (macOS) • 🪟 Windows Hello • 🔑 YubiKey • 📱 Phone authenticators</p>
+            <p>🍎 TouchID (macOS) • 🪟 Windows Hello • 🔑 YubiKey •
+            📱 Phone authenticators</p>
         </div>
 
         <div class="form-group">
             <label for="deviceName">Device Name</label>
-            <input type="text" id="deviceName" placeholder="e.g., My MacBook Pro, Work Laptop, YubiKey" value="">
+            <input type="text" id="deviceName"
+                   placeholder="e.g., My MacBook Pro, Work Laptop, YubiKey"
+                   value="">
         </div>
 
         <button onclick="register()" id="registerBtn">
@@ -1053,8 +1118,12 @@ class ApprovalServer:
                             id: credential.id,
                             rawId: arrayBufferToBase64(credential.rawId),
                             response: {
-                                clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
-                                attestationObject: arrayBufferToBase64(credential.response.attestationObject),
+                                clientDataJSON: arrayBufferToBase64(
+                                    credential.response.clientDataJSON
+                                ),
+                                attestationObject: arrayBufferToBase64(
+                                    credential.response.attestationObject
+                                ),
                             },
                             type: credential.type,
                         }
@@ -1065,13 +1134,21 @@ class ApprovalServer:
 
                 if (result.success) {
                     status.className = 'success show';
-                    status.innerHTML = '✅ <strong>Success!</strong><br><br>' + result.message + '<br><br>You can now approve Vault operations.<br><a href="/" style="color: #155724; font-weight: 600;">← Return to home</a>';
+                    status.innerHTML = (
+                        '✅ <strong>Success!</strong><br><br>' + result.message +
+                        '<br><br>You can now approve Vault operations.<br>'
+                        + '<a href="/" style="color: #155724; font-weight: 600;">'
+                        + '← Return to home</a>'
+                    );
                 } else {
                     throw new Error(result.message || 'Registration failed');
                 }
             } catch (err) {
                 status.className = 'error show';
-                status.innerHTML = '❌ <strong>Error:</strong> ' + err.message + '<br><br>Please try again or check the browser console for details.';
+                status.innerHTML = (
+                    '❌ <strong>Error:</strong> ' + err.message + '<br><br>'
+                    + 'Please try again or check the browser console for details.'
+                );
                 btn.disabled = false;
             }
         }
@@ -1084,30 +1161,93 @@ class ApprovalServer:
 </html>
 """
 
+    def _get_scan_approval_html(self, op: PendingOperation) -> str:
+        """Get HTML for scan operation approval page."""
+        metadata = op.metadata or {}
+        secret_count = metadata.get("secret_count", 0)
+        config_count = metadata.get("config_count", 0)
+
+        return f"""
+<div class="info-box">
+    <p><strong>Service:</strong> {op.service}</p>
+    <p><strong>File:</strong> {op.scan_file_path}</p>
+    <p><strong>Operation:</strong> {op.action}</p>
+</div>
+
+<div class="warning-box">
+    <h3>⚠️ What This Does</h3>
+    <p>This operation will read the file and tokenize detected secrets.</p>
+    <p>Secret values will <strong>NOT</strong> be sent to AI - only tokens.</p>
+    <p><strong>No files will be modified</strong> during this scan.</p>
+    <p style="margin-top: 15px;">Detected:
+    <strong>{secret_count} potential secret(s)</strong> and
+    <strong>{config_count} config value(s)</strong></p>
+</div>
+"""
+
     def _get_approval_html(self, op: PendingOperation) -> str:
         """Get HTML for approval page."""
-        # Generate secrets list with preview of first 20 chars
-        secrets_rows = ""
-        for key, value in op.secrets.items():
-            preview = value[:20] + "..." if len(value) > 20 else value
-            secrets_rows += f"""
+        # Route to appropriate HTML generator based on action type
+        if op.action in ["SCAN_ENV", "SCAN_COMPOSE"]:
+            action_specific_html = self._get_scan_approval_html(op)
+        else:
+            # Default: vault_set operations (CREATE/UPDATE)
+            # Generate secrets list with smart truncation for readability
+            secrets_rows = ""
+            for key, value in op.secrets.items():
+                # Smart truncation: show beginning and end for context
+                if len(value) <= 40:
+                    preview = value  # Show full value if reasonably short
+                elif len(value) <= 80:
+                    # Medium length: show first 30 + last 10
+                    preview = f"{value[:30]}...{value[-10:]}"
+                else:
+                    # Very long: show first 40 + last 15
+                    preview = "{}...{}".format(value[:40], value[-15:])
+
+                # Check if we have a token for this key
+                token_display = ""
+                if op.tokens_map and key in op.tokens_map:
+                    token = op.tokens_map[key]
+                    token_display = (
+                        '<br><span style="color: #6c757d; ' 'font-size: 0.85em;">Token: {}</span>'
+                    ).format(token)
+
+                secrets_rows += f"""
             <tr>
                 <td class="secret-key">{key}</td>
-                <td class="secret-value"><code>{preview}</code></td>
+                <td class="secret-value"><code>{preview}</code>{token_display}</td>
             </tr>
             """
 
-        # Generate warnings HTML
-        warnings_html = ""
-        if op.warnings:
-            warning_items = "".join(f"<li>{w}</li>" for w in op.warnings)
-            warnings_html = f"""
+            # Generate warnings HTML
+            warnings_html = ""
+            if op.warnings:
+                warning_items = "".join(f"<li>{w}</li>" for w in op.warnings)
+                warnings_html = f"""
             <div class="warning-box">
                 <h3>⚠️ Security Warnings</h3>
                 <ul>{warning_items}</ul>
                 <p><strong>Review carefully before approving!</strong></p>
             </div>
             """
+
+            action_specific_html = f"""
+<div class="info-box">
+    <p><strong>Service:</strong> {op.service}</p>
+    <p><strong>Action:</strong> <span class="badge badge-{op.action.lower()}">{op.action}</span></p>
+    <p><strong>Vault Path:</strong> secret/proxmox-services/{op.service}</p>
+</div>
+
+{warnings_html}
+
+<div class="secrets-box">
+    <h3>📝 Secrets to Write</h3>
+    <table class="secrets-table">
+        {secrets_rows}
+    </table>
+</div>
+"""
 
         return f"""
 <!DOCTYPE html>
@@ -1119,7 +1259,8 @@ class ApprovalServer:
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                Roboto, "Helvetica Neue", Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 40px 20px;
@@ -1220,6 +1361,10 @@ class ApprovalServer:
         .warning-box li {{
             margin: 5px 0;
         }}
+        .warning-box p {{
+            color: #856404;
+            margin: 8px 0;
+        }}
         .secrets-box {{
             background: #f8f9fa;
             border: 2px solid #dee2e6;
@@ -1245,6 +1390,11 @@ class ApprovalServer:
         }}
         .secrets-table td {{
             padding: 12px 8px;
+        }}
+        .secrets-table th {{
+            padding: 12px 8px;
+            font-weight: 600;
+            color: #495057;
         }}
         .secret-key {{
             font-weight: 600;
@@ -1346,24 +1496,7 @@ class ApprovalServer:
             <span class="badge badge-{op.action.lower()}">{op.action}</span>
         </h2>
 
-        <div class="info-box">
-            <p><strong>Service:</strong> {op.service}</p>
-            <p><strong>Vault Path:</strong> <code>secret/proxmox-services/{op.service}</code></p>
-            <p><strong>Operation:</strong> {op.action} secrets for this service</p>
-        </div>
-
-        {warnings_html}
-
-        <div class="secrets-box">
-            <h3>🔑 Secrets to be written ({len(op.secrets)}):</h3>
-            <table class="secrets-table">
-                {secrets_rows}
-            </table>
-        </div>
-
-        <div class="info-box" style="background: #fff3cd; border-color: #ffc107;">
-            <p style="color: #856404;"><strong>⚠️ Important:</strong> Review the secrets above carefully. Once approved, these values will be written to Claude-Vault and made available to the <strong>{op.service}</strong> service.</p>
-        </div>
+        {action_specific_html}
 
         <div class="button-group">
             <button class="btn-approve" onclick="approve()" id="approveBtn">
@@ -1407,7 +1540,10 @@ class ApprovalServer:
 
             try {{
                 // Get authentication options
-                const optionsRes = await fetch('/webauthn/authenticate/options', {{ method: 'POST' }});
+                const optionsRes = await fetch(
+                    '/webauthn/authenticate/options',
+                    {{ method: 'POST' }}
+                );
                 const {{ options, sessionId }} = await optionsRes.json();
 
                 // Convert base64 strings to ArrayBuffers
@@ -1422,7 +1558,8 @@ class ApprovalServer:
                 status.innerHTML = `
                     <div class="status-icon">👆</div>
                     <strong>Touch your authenticator to approve...</strong>
-                    <p style="margin-top: 10px;">Use TouchID, Windows Hello, or your security key</p>
+                    <p style="margin-top: 10px;">Use TouchID, Windows Hello,
+                    or your security key</p>
                 `;
 
                 // Get credential
@@ -1447,10 +1584,18 @@ class ApprovalServer:
                             id: credential.id,
                             rawId: arrayBufferToBase64(credential.rawId),
                             response: {{
-                                clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
-                                authenticatorData: arrayBufferToBase64(credential.response.authenticatorData),
-                                signature: arrayBufferToBase64(credential.response.signature),
-                                userHandle: credential.response.userHandle ? arrayBufferToBase64(credential.response.userHandle) : null,
+                                clientDataJSON: arrayBufferToBase64(
+                                    credential.response.clientDataJSON
+                                ),
+                                authenticatorData: arrayBufferToBase64(
+                                    credential.response.authenticatorData
+                                ),
+                                signature: arrayBufferToBase64(
+                                    credential.response.signature
+                                ),
+                                userHandle: credential.response.userHandle
+                                    ? arrayBufferToBase64(credential.response.userHandle)
+                                    : null,
                             }},
                             type: credential.type,
                         }}
@@ -1464,9 +1609,16 @@ class ApprovalServer:
                     status.innerHTML = `
                         <div class="status-icon">✅</div>
                         <strong>${{result.message}}</strong>
-                        <p style="margin-top: 15px;">The secrets have been approved and written to Claude-Vault.</p>
+                        <p style="margin-top: 15px;">
+                            The secrets have been approved and written to
+                            Claude-Vault.
+                        </p>
                         <p style="margin-top: 10px;">
-                            <a href="/" style="color: #155724; font-weight: 600; text-decoration: underline;">← Return to home</a>
+                            <a href="/"
+                               style="color: #155724; font-weight: 600;
+                                      text-decoration: underline;">
+                                ← Return to home
+                            </a>
                         </p>
                     `;
                 }} else {{
@@ -1499,7 +1651,12 @@ class ApprovalServer:
 """
 
     def create_pending_operation(
-        self, service: str, action: str, secrets: Dict[str, str], warnings: list = None
+        self,
+        service: str,
+        action: str,
+        secrets: Dict[str, str],
+        warnings: list = None,
+        tokens_map: Dict[str, str] = None,
     ) -> tuple[str, str]:
         """Create a pending operation and return (operation ID, approval URL)."""
         op_id = secrets_module.token_urlsafe(16)
@@ -1511,6 +1668,7 @@ class ApprovalServer:
             secrets=secrets,
             warnings=warnings or [],
             created_at=datetime.now().timestamp(),
+            tokens_map=tokens_map,  # Store token mapping for display
         )
 
         # Save to disk for cross-process sharing
@@ -1520,6 +1678,66 @@ class ApprovalServer:
         approval_url = f"{self.origin}/approve/{op_id}"
 
         return op_id, approval_url
+
+    def create_operation(
+        self,
+        service: str,
+        action: str,
+        secrets: Dict[str, str],
+        warnings: list = None,
+        scan_file_path: str = None,
+        metadata: Dict = None,
+        tokens_map: Dict[str, str] = None,
+    ) -> str:
+        """
+        Create a pending operation and return operation ID.
+
+        This is an extended version that supports scan operations.
+
+        Args:
+            service: Service name
+            action: Operation action (CREATE, UPDATE, SCAN_ENV, SCAN_COMPOSE)
+            secrets: Secret values (may contain tokens like @token-xxx)
+            warnings: Security warnings
+            scan_file_path: File path for scan operations
+            metadata: Additional metadata
+            tokens_map: Optional mapping of key names to token values for display
+
+        Returns:
+            Operation ID
+        """
+        op_id = secrets_module.token_urlsafe(16)
+
+        # Secrets are expected to already be detokenized by the calling tool
+        # The tokens_map (if provided) maps keys to their original token values for display
+        self.pending_ops[op_id] = PendingOperation(
+            op_id=op_id,
+            service=service,
+            action=action,
+            secrets=secrets,
+            warnings=warnings or [],
+            created_at=datetime.now().timestamp(),
+            scan_file_path=scan_file_path,
+            metadata=metadata,
+            tokens_map=tokens_map,
+        )
+
+        # Save to disk for cross-process sharing
+        self._save_pending_operations()
+
+        return op_id
+
+    def get_approval_url(self, op_id: str) -> str:
+        """Get approval URL for an operation."""
+        return f"{self.origin}/approve/{op_id}"
+
+    def check_approval(self, op_id: str) -> bool:
+        """
+        Check if operation is approved.
+
+        This is an alias for is_approved() for consistency with tool interface.
+        """
+        return self.is_approved(op_id)
 
     def is_approved(self, op_id: str) -> bool:
         """Check if operation is approved."""

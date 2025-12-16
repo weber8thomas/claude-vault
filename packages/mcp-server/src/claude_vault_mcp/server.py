@@ -6,10 +6,12 @@ from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from .tools.auth import VaultLoginTool, VaultLogoutTool
+from .tools.example import VaultGenerateExampleTool
 from .tools.inject import VaultInjectTool
 
 # Import all tool handlers
 from .tools.read import VaultGetTool, VaultListTool, VaultStatusTool
+from .tools.scan import VaultScanComposeTool, VaultScanEnvTool
 from .tools.write import VaultSetTool
 
 # Create MCP server
@@ -24,6 +26,9 @@ TOOL_HANDLERS = {
     "vault_get": VaultGetTool(),
     "vault_set": VaultSetTool(),
     "vault_inject": VaultInjectTool(),
+    "vault_scan_env": VaultScanEnvTool(),
+    "vault_scan_compose": VaultScanComposeTool(),
+    "vault_generate_example": VaultGenerateExampleTool(),
 }
 
 
@@ -56,7 +61,9 @@ async def call_tool(name: str, arguments: dict) -> Sequence[TextContent]:
         return [
             TextContent(
                 type="text",
-                text=f"❌ Unknown tool: {name}\n\nAvailable tools: {', '.join(TOOL_HANDLERS.keys())}",
+                text="❌ Unknown tool: {}\n\nAvailable tools: {}".format(
+                    name, ", ".join(TOOL_HANDLERS.keys())
+                ),
             )
         ]
 

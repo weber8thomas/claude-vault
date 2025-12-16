@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "claude-vault": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/workspace/claude-vault/packages/mcp-server",
+        "claude-vault-mcp"
+      ],
+      "env": {
+        "VAULT_ADDR": "https://vault.laboiteaframboises.duckdns.org",
+        "VAULT_SECURITY_MODE": "tokenized",
+        "VAULT_TOKEN_SESSION_TTL": "7200"
+      }
+    }
+  }
+}

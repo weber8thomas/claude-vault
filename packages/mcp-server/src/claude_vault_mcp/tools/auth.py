@@ -1,8 +1,6 @@
 """Authentication tools: vault_login, vault_logout."""
 
 import os
-import subprocess
-from pathlib import Path
 from typing import Sequence
 
 from mcp.types import TextContent, Tool
@@ -21,14 +19,18 @@ class VaultLoginTool(ToolHandler):
     def get_tool_description(self) -> Tool:
         return Tool(
             name=self.name,
-            description="""Authenticate to HashiCorp Vault via OIDC. This guides the user through the
-browser-based authentication flow and updates environment variables.
-
-⚠️ IMPORTANT: This tool cannot directly update environment variables for a running MCP server.
-It will provide instructions for the user to complete the authentication, after which they must
-restart the MCP server to pick up the new token.
-
-The tool calls the existing vault-login-simple.sh script to handle the complex OIDC flow.""",
+            description=(
+                "Authenticate to HashiCorp Vault via OIDC. This guides the user "
+                "through the browser-based authentication flow and updates "
+                "environment variables.\n\n"
+                "⚠️ IMPORTANT: This tool cannot directly update environment variables "
+                "for a running MCP server.\n"
+                "It will provide instructions for the user to complete the "
+                "authentication, after which they must\n"
+                "restart the MCP server to pick up the new token.\n\n"
+                "The tool calls the existing vault-login-simple.sh script to handle "
+                "the complex OIDC flow."
+            ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         )
 
@@ -70,7 +72,10 @@ This will:
 2. Claude Code will automatically inherit the new token
 3. You can verify with: vault_status
 
-**Session duration:** 60 minutes
+**Session duration:** 60 minutes (default)
+  • Configurable via: export VAULT_MAX_TOKEN_TTL=7200  # 2 hours
+  • Supported values: Any positive integer in seconds
+  • Recommendation: 3600-7200 seconds (1-2 hours)
 
 ⚠️ Note: This MCP server cannot execute the login script directly because it would run
 in a subprocess with a separate environment. The user must source the script in their
@@ -88,11 +93,13 @@ class VaultLogoutTool(ToolHandler):
     def get_tool_description(self) -> Tool:
         return Tool(
             name=self.name,
-            description="""Revoke the current Vault token and provide instructions to clear environment
-variables. This invalidates the session and requires re-authentication for future operations.
-
-⚠️ IMPORTANT: After logout, the user must manually unset environment variables and restart
-the MCP server.""",
+            description=(
+                "Revoke the current Vault token and provide instructions to clear "
+                "environment\nvariables. This invalidates the session and requires "
+                "re-authentication for future operations.\n\n"
+                "⚠️ IMPORTANT: After logout, the user must manually unset environment "
+                "variables and restart\nthe MCP server."
+            ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         )
 
@@ -117,7 +124,9 @@ they may have already been cleared.""",
         if response.success:
             revoke_message = "✅ Token successfully revoked in Vault."
         else:
-            revoke_message = f"⚠️ Could not revoke token: {response.error}\n(Token may have already been revoked or expired)"
+            revoke_message = (
+                "⚠️ Could not revoke token: {}\n" "(Token may have already been revoked or expired)"
+            ).format(response.error)
 
         return [
             TextContent(
