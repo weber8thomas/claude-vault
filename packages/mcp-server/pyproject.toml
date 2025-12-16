@@ -4,6 +4,21 @@ version = "1.0.0"
 description = "MCP server for HashiCorp Vault secret management via claude-vault"
 readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Thomas Weber", email = "weber8thomas@users.noreply.github.com"}
+]
+keywords = ["mcp", "vault", "secrets", "security", "webauthn", "claude", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = [
     "mcp>=1.1.0",
     "requests>=2.32.3",
@@ -13,6 +28,12 @@ dependencies = [
     "webauthn>=2.0.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/weber8thomas/claude-vault"
+Repository = "https://github.com/weber8thomas/claude-vault"
+Documentation = "https://github.com/weber8thomas/claude-vault#readme"
+Issues = "https://github.com/weber8thomas/claude-vault/issues"
 
 [project.scripts]
 claude-vault-mcp = "claude_vault_mcp:run"

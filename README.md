@@ -16,14 +16,16 @@ Claude-Vault provides two complementary tools:
 
 ## Why This Exists
 
+> **Personal Context:** This project was born from managing a Proxmox homelab with 20+ services, each with scattered credentials that needed proper centralized secret management and a way to clean up the infrastructure chaos.
+
 **The Problem:**
 Managing many Docker/docker-compose services, each with their own `.env` files and hardcoded credentials scattered everywhere. Not scalable, not secure, not production-ready.
 
 **The Goal:**
-Migrate from non-production chaos (passwords in docker-compose files, untracked `.env` files) to a production-oriented HashiCorp Vault setup that's:
-- **Cloud-compatible** - Works across infrastructure
-- **AI-assisted** - Claude Code helps migrate services and manage secrets
-- **Secure by default** - Human-in-the-loop validation via WebAuthn prevents unauthorized AI writes
+Migrate from non-production chaos (passwords in docker-compose files, untracked `.env` files) to a production-oriented HashiCorp Vault setup meeting these requirements:
+- **Cloud-compatible** - Must work across infrastructure
+- **AI-assisted** - Need Claude Code to help migrate services and manage secrets
+- **Secure by default** - Require human-in-the-loop validation via WebAuthn to prevent unauthorized AI writes
 
 **The Result:**
 AI handles the tedious migration work (reading old configs, registering secrets), but **cannot make unauthorized changes** to production secrets without your biometric approval.
@@ -32,38 +34,51 @@ AI handles the tedious migration work (reading old configs, registering secrets)
 
 ## 🌟 Key Features
 
-### Zero-Knowledge AI Assistance
-**🔒 Your secrets never reach AI providers**
-- **Tokenization** - Sensitive values replaced with temporary tokens (`@token-xxx`)
-- **Local processing** - MCP server runs on your machine, not in the cloud
-- **Secrets stay local** - Only structure and metadata sent to Claude API
-- **Human verification** - WebAuthn approval required for all write operations
+### How It Works
 
-### AI-Assisted Workflows (MCP Server)
-**🤖 Let Claude Code help you manage secrets securely**
-- **Interactive secret management** - Natural language commands for Vault operations
-- **Configuration migration** - AI helps migrate `.env` files and docker-compose configs to Vault
-- **Smart scanning** - Automatically detect and tokenize secrets in existing files
-- **Operation tracking** - Web UI dashboard shows pending approvals and history (100 operations, permanent retention)
+```
+┌─────────────────┐
+│   You ask AI    │  "Scan my .env files and migrate to Vault"
+│  (Claude Code)  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   MCP Server    │  → Tokenizes secrets: PASSWORD="super_secret"
+│  (Your Machine) │     becomes PASSWORD="@token-abc123"
+└────────┬────────┘  → AI never sees real values
+         │
+         ├──────────────────────────────────────┐
+         │                                      │
+         ▼                                      ▼
+┌─────────────────┐                   ┌─────────────────┐
+│   Claude API    │                   │  Approval Page  │
+│    (Remote)     │                   │  (Your Browser) │
+└─────────────────┘                   └────────┬────────┘
+Sees: @token-abc123                            │
+Never sees: super_secret              Approve with TouchID
+                                               │
+         ┌─────────────────────────────────────┘
+         ▼
+┌─────────────────┐
+│ HashiCorp Vault │  ✓ Secrets stored securely
+│  (Your Infra)   │  ✓ Changes approved by you
+└─────────────────┘  ✓ Full audit trail
+```
 
-### WebAuthn Security
-**🛡️ Biometric approval for all write operations**
-- **TouchID / Windows Hello** - Use your device's built-in biometrics
-- **Hardware security keys** - Support for YubiKey and other FIDO2 devices
-- **Multi-device management** - Register multiple authenticators for redundancy
-- **Approval server** - Web UI at `http://localhost:8091` for reviewing operations
+### Core Capabilities
 
-### Production-Ready CLI
-**💻 Standalone tool for direct Vault access**
-- **OIDC + MFA authentication** - Session-based with 60-minute token expiry
-- **Zero persistence** - Tokens stored only in shell environment
-- **Comprehensive audit trail** - All operations logged for compliance
-- **Input validation** - Protection against injection attacks
-- **Service-oriented** - Designed for Docker/docker-compose secret management
+**🔒 Zero-Knowledge AI** - Secrets tokenized before reaching Claude API; MCP server runs locally, real values never leave your infrastructure
+
+**🤖 AI-Assisted Migration** - Natural language commands to scan `.env` files, docker-compose configs, and migrate secrets to Vault automatically
+
+**🛡️ Human-in-the-Loop Security** - WebAuthn biometric approval (TouchID/Windows Hello/YubiKey) required for all write operations
+
+**💻 Production-Ready** - OIDC+MFA authentication, comprehensive audit trails, operation history tracking (100 ops, permanent retention)
 
 ## 🎯 Use Cases
 
-### 1. Migrate Docker Services to Vault
+### Primary: Migrate Docker Services to Vault
 **Problem:** You have 20+ docker-compose services with hardcoded passwords and scattered `.env` files.
 
 **Complete Workflow:**
@@ -99,42 +114,31 @@ AI handles the tedious migration work (reading old configs, registering secrets)
 
 **Result:** Secrets migrated to Vault, old .env file documented but can be deleted
 
-### 2. Audit and Rotate Secrets
-**Problem:** You need to find all services using a specific database password.
+### Other Common Tasks
 
-**Solution:** Use Claude Code naturally:
+**Audit and Rotate Secrets**
+
+Need to find all services using a specific database password? Ask Claude Code naturally:
 ```
 "Which services are using the old database password?"
 "Help me rotate the database credentials for all affected services"
 ```
+The AI reads Vault through the MCP server to help you understand your secret landscape, but any changes require your biometric approval.
 
-The AI can read Vault (through MCP server) to help you understand your secret landscape, but any changes require your biometric approval.
+**Generate Service Configurations**
 
-### 3. Generate Service Configurations
-**Problem:** Setting up a new service that needs 10+ environment variables from Vault.
-
-**Solution:** Let Claude Code do the work:
+Setting up a new service that needs 10+ environment variables from Vault? Let Claude Code handle it:
 ```
 "Create a .env file for my new API service using secrets from Vault"
 ```
+The MCP server injects real values locally - AI never sees them, just orchestrates the workflow.
 
-The MCP server injects real values locally - AI never sees them, just helps orchestrate the workflow.
+**Infrastructure as Code**
 
-### 4. Infrastructure as Code
-**Problem:** You want to version-control your service structure without exposing secrets.
-
-**Solution:** Commit `.env.example` files and docker-compose templates:
-- `.env.example` - Shows structure with `<REDACTED>` placeholders
-- Actual secrets stay in Vault
-- Claude Code helps generate both from your existing setup
-
-### 5. Secure AI Collaboration
-**Problem:** You want AI help managing production systems without exposing credentials.
-
-**Solution:** This is exactly what Claude-Vault was built for:
-- AI provides intelligence (scanning, organizing, suggesting)
-- You provide authorization (WebAuthn approval for changes)
-- Secrets stay in your infrastructure (tokenization prevents leakage)
+Version-control your service structure without exposing secrets:
+- Commit `.env.example` files with `<REDACTED>` placeholders to git
+- Keep actual secrets in Vault
+- Claude Code helps generate example files from your existing setup
 
 ## 📦 Installation
 
@@ -146,23 +150,40 @@ The MCP server injects real values locally - AI never sees them, just helps orch
 
 ### Installation Options
 
-#### Option A: MCP Server Only (Recommended for AI-Assisted Workflows)
+#### Option A: MCP Server from PyPI (Recommended - No Repo Clone Needed!)
 ```bash
-# Clone repository
-git clone https://github.com/weber8thomas/claude-vault.git
-cd claude-vault
+# Install directly from PyPI
+pip install claude-vault-mcp
 
-# Install MCP server
-cd packages/mcp-server
-pip install -e .
-
-# Verify installation
-vault-approve-server --help
+# Or using uvx (recommended - auto-managed environment)
+uvx --from claude-vault-mcp vault-approve-server --help
 ```
+
+**Add to Claude Code** - Simply reference the package name in your `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "claude-vault": {
+      "command": "uvx",
+      "args": ["claude-vault-mcp"],
+      "env": {
+        "VAULT_ADDR": "https://vault.example.com",
+        "VAULT_TOKEN": "${VAULT_TOKEN}",
+        "VAULT_SECURITY_MODE": "tokenized"
+      }
+    }
+  }
+}
+```
+
+**Find this server on MCP directories:**
+- [Smithery.ai](https://smithery.ai) - Official Anthropic-maintained catalog
+- [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers) - Curated community list (high visibility)
+- [mcp.so](https://mcp.so) - Community platform with 17K+ servers
 
 #### Option B: CLI Only (For Direct Vault Management)
 ```bash
-# Quick install from release (recommended)
+# Quick install from release
 curl -fsSL https://github.com/weber8thomas/claude-vault/releases/latest/download/install.sh | sudo bash
 
 # Or install to ~/.local/bin (no sudo)
@@ -172,18 +193,21 @@ curl -fsSL https://github.com/weber8thomas/claude-vault/releases/latest/download
 claude-vault --help
 ```
 
-#### Option C: Both MCP Server + CLI (Full Setup)
+#### Option C: Development Installation (From Source)
 ```bash
-# Clone and install MCP server
+# Clone repository
 git clone https://github.com/weber8thomas/claude-vault.git
-cd claude-vault/packages/mcp-server
+cd claude-vault
+
+# Install MCP server in editable mode
+cd packages/mcp-server
 pip install -e .
 
-# Install CLI tools
+# Install CLI tools (optional)
 cd ../..
 sudo ./install.sh
 
-# Verify both installations
+# Verify installations
 vault-approve-server --help
 claude-vault --help
 ```
@@ -240,13 +264,8 @@ Add to your project's `.mcp.json`:
 {
   "mcpServers": {
     "claude-vault": {
-      "type": "stdio",
       "command": "uvx",
-      "args": [
-        "--from",
-        "/path/to/claude-vault/packages/mcp-server",
-        "claude-vault-mcp"
-      ],
+      "args": ["claude-vault-mcp"],
       "env": {
         "VAULT_ADDR": "https://vault.example.com",
         "VAULT_TOKEN": "${VAULT_TOKEN}",
@@ -258,6 +277,8 @@ Add to your project's `.mcp.json`:
 ```
 
 **Important:** The MCP server inherits `VAULT_TOKEN` from your shell environment.
+
+> **Note:** If you installed from source (Option C), use the full path: `"args": ["--from", "/path/to/claude-vault/packages/mcp-server", "claude-vault-mcp"]`
 
 #### Step 4: Register WebAuthn Device
 1. Open http://localhost:8091 in your browser

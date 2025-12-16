@@ -1,0 +1,54 @@
+name: claude-vault
+version: 1.0.0
+description: AI-assisted HashiCorp Vault management with zero secrets sent to AI providers
+author: weber8thomas
+license: MIT
+repository: https://github.com/weber8thomas/claude-vault
+
+tags:
+  - vault
+  - secrets
+  - security
+  - webauthn
+  - docker
+  - infrastructure
+
+install:
+  uvx:
+    package: claude-vault-mcp
+
+config:
+  env:
+    VAULT_ADDR:
+      description: Your HashiCorp Vault server address
+      required: true
+      example: "https://vault.example.com"
+    VAULT_TOKEN:
+      description: Vault authentication token (from shell environment)
+      required: true
+      example: "${VAULT_TOKEN}"
+    VAULT_SECURITY_MODE:
+      description: Security mode (tokenized or plaintext)
+      required: false
+      default: "tokenized"
+
+features:
+  - Zero-knowledge AI assistance - secrets tokenized before reaching Claude API
+  - WebAuthn biometric approval for all write operations
+  - Natural language commands for secret migration and management
+  - Docker/docker-compose config scanning and migration
+  - Comprehensive audit trail and operation history
+
+requirements:
+  - HashiCorp Vault server with OIDC authentication
+  - vault-approve-server running on http://localhost:8091
+  - WebAuthn-compatible browser (Chrome, Firefox, Safari, Edge)
+
+usage: |
+  1. Start approval server: `vault-approve-server`
+  2. Authenticate to Vault: `source claude-vault login`
+  3. Configure Claude Code with the generated .mcp.json
+  4. Register WebAuthn device at http://localhost:8091
+  5. Ask Claude Code to help manage your secrets
+
+  Example: "Scan my docker-compose.yml and migrate secrets to Vault"
