@@ -932,6 +932,9 @@ class ApprovalServer:
         @self.app.get("/status/{op_id}")
         async def check_status(op_id: str):
             """Check if operation is approved."""
+            # Reload from disk to get operations created by other processes
+            self._load_pending_operations()
+
             if op_id not in self.pending_ops:
                 return {"approved": False, "error": "Operation not found"}
 
