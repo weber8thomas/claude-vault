@@ -201,7 +201,7 @@ class ApprovalServer:
                 )
                 reset_button = (
                     '<button onclick="resetCredentials()" class="action-button" '
-                    'style="background: #dc3545; margin-top: 10px;">'
+                    'style="background: #dc3545;">'
                     "🗑️ Reset Authenticator</button>"
                 )
             else:
@@ -303,7 +303,16 @@ class ApprovalServer:
         }}
         button.action-button {{
             width: auto;
-            display: block;
+            display: inline-block;
+        }}
+        .action-buttons-container {{
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }}
+        .action-buttons-container .action-button {{
+            margin: 0;
         }}
         .info-box {{
             background: #e7f3ff;
@@ -525,8 +534,10 @@ class ApprovalServer:
 
         <h2 style="margin-top: 30px;">Actions</h2>
 
-        {auth_button}
-        {reset_button}
+        <div class="action-buttons-container">
+            {auth_button}
+            {reset_button}
+        </div>
 
         <div class="info-box" style="margin-top: 30px;">
             <p><strong>How it works:</strong></p>
