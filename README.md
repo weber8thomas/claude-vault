@@ -66,17 +66,38 @@ AI handles the tedious migration work (reading old configs, registering secrets)
 ### 1. Migrate Docker Services to Vault
 **Problem:** You have 20+ docker-compose services with hardcoded passwords and scattered `.env` files.
 
-**Solution:** Ask Claude Code to help:
-```
-"Scan my docker-compose.yml and migrate all secrets to Vault"
-```
+**Complete Workflow:**
 
-Claude Code will:
-- Scan your configuration files and detect secrets
-- Show you tokenized preview (actual secrets never sent to API)
-- Wait for your WebAuthn approval
-- Register secrets in Vault under proper paths
-- Generate `.env.example` files for documentation
+1. **You:** "Scan the docker-compose.yml in /services/jellyfin and migrate secrets to Vault"
+
+2. **Claude Code:** Calls `vault_scan_compose(service="jellyfin")`
+   - MCP server reads your docker-compose.yml
+   - Detects secrets (passwords, API keys, etc.)
+   - **Tokenizes them**: `JELLYFIN_PASSWORD="@token-a8f3d9e1"`
+   - Creates operation requiring WebAuthn approval
+
+3. **Claude Code:** Shows you:
+   ```
+   📋 Found 5 secrets in jellyfin/docker-compose.yml:
+   - JELLYFIN_PASSWORD: @token-a8f3d9e1
+   - API_KEY: @token-b2c4f7a9
+   - DB_PASSWORD: @token-c5d6e8f9
+
+   ⚠️  Approve at: http://localhost:8091/approve/xyz123
+   ```
+
+4. **You:** Open approval URL in browser
+   - **See real values** (not tokens) in approval page
+   - Review: service name, operation type, all secrets
+   - Click "Approve with WebAuthn"
+   - Authenticate with TouchID/Windows Hello
+
+5. **Claude Code:** After approval, calls `vault_set()`
+   - Registers secrets in Vault at `secret/proxmox-services/jellyfin`
+   - Generates `.env.example` with `<REDACTED>` placeholders
+   - Creates documentation
+
+**Result:** Secrets migrated to Vault, old .env file documented but can be deleted
 
 ### 2. Audit and Rotate Secrets
 **Problem:** You need to find all services using a specific database password.
@@ -115,6 +136,58 @@ The MCP server injects real values locally - AI never sees them, just helps orch
 - You provide authorization (WebAuthn approval for changes)
 - Secrets stay in your infrastructure (tokenization prevents leakage)
 
+## 📦 Installation
+
+### Prerequisites
+- **HashiCorp Vault** server with OIDC authentication configured
+- **Python 3.12+** (for MCP server)
+- **Claude Code** (for AI-assisted workflows)
+- Modern browser with WebAuthn support (Chrome, Firefox, Safari, Edge)
+
+### Installation Options
+
+#### Option A: MCP Server Only (Recommended for AI-Assisted Workflows)
+```bash
+# Clone repository
+git clone https://github.com/weber8thomas/claude-vault.git
+cd claude-vault
+
+# Install MCP server
+cd packages/mcp-server
+pip install -e .
+
+# Verify installation
+vault-approve-server --help
+```
+
+#### Option B: CLI Only (For Direct Vault Management)
+```bash
+# Quick install from release (recommended)
+curl -fsSL https://github.com/weber8thomas/claude-vault/releases/latest/download/install.sh | sudo bash
+
+# Or install to ~/.local/bin (no sudo)
+curl -fsSL https://github.com/weber8thomas/claude-vault/releases/latest/download/install.sh | PREFIX="$HOME/.local/bin" bash
+
+# Verify installation
+claude-vault --help
+```
+
+#### Option C: Both MCP Server + CLI (Full Setup)
+```bash
+# Clone and install MCP server
+git clone https://github.com/weber8thomas/claude-vault.git
+cd claude-vault/packages/mcp-server
+pip install -e .
+
+# Install CLI tools
+cd ../..
+sudo ./install.sh
+
+# Verify both installations
+vault-approve-server --help
+claude-vault --help
+```
+
 ## Repository Structure
 
 ```
@@ -127,15 +200,11 @@ claude-vault/
 
 ## 🚀 Quick Start
 
-### Option 1: MCP Server (AI-Assisted Management) - **Recommended**
+### Complete MCP Server Workflow (AI-Assisted Management)
 
-#### Step 1: Install MCP Server
-```bash
-cd packages/mcp-server
-pip install -e .
-```
+*Assumes you've installed the MCP server (see Installation section above)*
 
-#### Step 2: Start the Approval Server
+#### Step 1: Start the Approval Server
 **The approval server must be running before using the MCP server:**
 ```bash
 vault-approve-server
@@ -148,7 +217,7 @@ This starts a web server on **http://localhost:8091** where you'll:
 
 **Keep this running in a separate terminal while using Claude Code.**
 
-#### Step 3: Authenticate to Vault
+#### Step 2: Authenticate to Vault
 In another terminal, authenticate your session:
 ```bash
 source claude-vault login
@@ -165,7 +234,7 @@ This will:
 claude-vault status
 ```
 
-#### Step 4: Configure Claude Code
+#### Step 3: Configure Claude Code
 Add to your project's `.mcp.json`:
 ```json
 {
@@ -190,13 +259,13 @@ Add to your project's `.mcp.json`:
 
 **Important:** The MCP server inherits `VAULT_TOKEN` from your shell environment.
 
-#### Step 5: Register WebAuthn Device
+#### Step 4: Register WebAuthn Device
 1. Open http://localhost:8091 in your browser
 2. Click **"Register Authenticator"**
 3. Follow prompts to register your biometric device
 4. You're ready to use Claude Code with secure approvals!
 
-#### Step 6: Use with Claude Code
+#### Step 5: Use with Claude Code
 Now ask Claude Code to help manage your secrets:
 ```
 "Scan my docker-compose.yml for secrets and help me migrate them to Vault"
@@ -208,52 +277,73 @@ When Claude Code needs to write secrets, it will:
 3. Wait for your WebAuthn approval
 4. Process the operation after you approve
 
-### Option 2: CLI Only (Manual Vault Management)
+### CLI Workflow (Manual Vault Management)
 
-**Quick install (recommended):**
-```bash
-# Install latest release
-curl -fsSL https://github.com/weber8thomas/claude-vault/releases/latest/download/install.sh | sudo bash
+*Assumes you've installed the CLI (see Installation section above)*
 
-# Or install to ~/.local/bin (no sudo)
-curl -fsSL https://github.com/weber8thomas/claude-vault/releases/latest/download/install.sh | PREFIX="$HOME/.local/bin" bash
-```
-
-**Install specific version:**
-```bash
-VERSION="v1.0.0"
-curl -fsSL "https://github.com/weber8thomas/claude-vault/releases/download/${VERSION}/install.sh" | sudo bash
-```
-
-**Manual installation:**
-```bash
-# Clone from source
-git clone https://github.com/weber8thomas/claude-vault.git
-cd claude-vault
-sudo ./install.sh
-```
-
-**Authentication:**
+#### Step 1: Authenticate to Vault
 ```bash
 source claude-vault login
 ```
 
-**Usage:**
+This will:
+1. Open your Vault OIDC login in browser
+2. Prompt for MFA (e.g., Authentik)
+3. Set `VAULT_TOKEN` in your environment
+4. Session lasts 60 minutes
+
+#### Step 2: Verify Session
 ```bash
-claude-vault list                  # List all services
-claude-vault get esphome           # Get secret values
-claude-vault set myapp KEY=val     # Register secrets
-claude-vault inject authentik      # Inject to .env file
+claude-vault status
 ```
 
-**Available commands:**
-- `login` - Authenticate via OIDC
-- `status` - Check session status
-- `logout` - Revoke token
-- `list` - List services/secrets
-- `get` - Get secret values
-- `set` - Create/update secrets
-- `inject` - Inject secrets to .env file
+Expected output:
+```
+✅ Vault Session Active
+User: your-username
+Policies: default, homelab-services
+Time Remaining: 59m 30s
+```
+
+#### Step 3: Use CLI Commands
+
+**List all services:**
+```bash
+claude-vault list
+```
+
+**Get secrets for a service:**
+```bash
+claude-vault get jellyfin
+# Returns: API_KEY, DB_PASSWORD, etc.
+```
+
+**Register new secrets:**
+```bash
+claude-vault set myapp API_KEY=abc123 DB_PASS=secret
+```
+
+**Inject secrets to .env file:**
+```bash
+claude-vault inject myapp
+# Creates myapp/.env with real values from Vault
+```
+
+**Logout (revoke token):**
+```bash
+claude-vault logout
+```
+
+#### Available Commands
+| Command | Description | Example |
+|---------|-------------|---------|
+| `login` | Authenticate via OIDC+MFA | `source claude-vault login` |
+| `status` | Check session validity | `claude-vault status` |
+| `logout` | Revoke Vault token | `claude-vault logout` |
+| `list` | List services/secrets | `claude-vault list` or `claude-vault list myapp` |
+| `get` | Get secret values | `claude-vault get myapp` |
+| `set` | Create/update secrets | `claude-vault set myapp KEY=value` |
+| `inject` | Write secrets to .env | `claude-vault inject myapp` |
 
 ## WebAuthn Approval Workflow
 
