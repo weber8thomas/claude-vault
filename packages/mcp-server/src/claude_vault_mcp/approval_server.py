@@ -1574,17 +1574,22 @@ class ApprovalServer:
         else:
             # Default: vault_set operations (CREATE/UPDATE)
             # Generate secrets list with smart truncation for readability
+            import html
+
             secrets_rows = ""
             for key, value in op.secrets.items():
-                # Smart truncation: show beginning and end for context
-                if len(value) <= 40:
-                    preview = value  # Show full value if reasonably short
-                elif len(value) <= 80:
-                    # Medium length: show first 30 + last 10
-                    preview = f"{value[:30]}...{value[-10:]}"
+                # Escape HTML in values for safe display
+                value_escaped = html.escape(value)
+
+                # Increased truncation limits for better readability
+                if len(value) <= 100:
+                    preview = value_escaped  # Show full value if reasonably short
+                elif len(value) <= 200:
+                    # Medium length: show first 80 + last 20
+                    preview = f"{value_escaped[:80]}...{value_escaped[-20:]}"
                 else:
-                    # Very long: show first 40 + last 15
-                    preview = "{}...{}".format(value[:40], value[-15:])
+                    # Very long: show first 100 + last 30
+                    preview = "{}...{}".format(value_escaped[:100], value_escaped[-30:])
 
                 # Check if we have a token for this key
                 token_display = ""
@@ -1594,10 +1599,13 @@ class ApprovalServer:
                         '<br><span style="color: #6c757d; ' 'font-size: 0.85em;">Token: {}</span>'
                     ).format(token)
 
+                # Add title attribute to show full value on hover
                 secrets_rows += f"""
             <tr>
                 <td class="secret-key">{key}</td>
-                <td class="secret-value"><code>{preview}</code>{token_display}</td>
+                <td class="secret-value">
+                    <code title="{value_escaped}">{preview}</code>{token_display}
+                </td>
             </tr>
             """
 
@@ -1854,15 +1862,23 @@ class ApprovalServer:
         .secret-value {{
             color: #6c757d;
             font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-            font-size: 0.9em;
+            font-size: 0.95em;
             width: 70%;
             word-break: break-all;
         }}
         .secret-value code {{
             background: #e9ecef;
-            padding: 4px 8px;
+            padding: 6px 10px;
             border-radius: 4px;
             color: #495057;
+            cursor: help;
+            transition: background-color 0.2s;
+            display: inline-block;
+            max-width: 100%;
+        }}
+        .secret-value code:hover {{
+            background: #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }}
         .button-group {{
             display: flex;
