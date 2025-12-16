@@ -197,7 +197,7 @@ class ApprovalServer:
                 )
                 auth_button = (
                     '<a href="/register" class="action-button secondary">'
-                    "Manage Authenticators</a>"
+                    "⚙️ Manage Authenticators</a>"
                 )
                 reset_button = (
                     '<button onclick="resetCredentials()" class="action-button" '
@@ -213,7 +213,7 @@ class ApprovalServer:
                     "</div>"
                 )
                 auth_button = (
-                    '<a href="/register" class="action-button">' "Register Authenticator</a>"
+                    '<a href="/register" class="action-button">' "⚙️ Register Authenticator</a>"
                 )
                 reset_button = ""
 
