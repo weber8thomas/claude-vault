@@ -1059,7 +1059,7 @@ class ApprovalServer:
             action_badge_class = "badge-info" if op.action == "CREATE" else "badge-secondary"
 
             ops_rows += """
-            <tr class="clickable-row" data-op-id="{}" onclick="showOperationDetails('{}')">
+            <tr>
                 <td><strong>{}</strong></td>
                 <td><span class="badge {}">{}</span></td>
                 <td>{} secret(s)</td>
@@ -1067,11 +1067,9 @@ class ApprovalServer:
                 <td class="time-ago">{}</td>
                 <td class="time-ago">{}</td>
                 <td><a href="/approve/{}" style="color: #667eea; text-decoration: none; '
-                'font-weight: 600;" onclick="event.stopPropagation();">View →</a></td>
+                'font-weight: 600;">View →</a></td>
             </tr>
             """.format(
-                op_id,
-                op_id,
                 op.service,
                 action_badge_class,
                 op.action,
@@ -1081,34 +1079,6 @@ class ApprovalServer:
                 age_str,
                 op_id,
             )
-
-        # Build JavaScript data for modal
-        import json
-
-        js_data = (
-            "    <script>\n"
-            "        if (typeof operationDetails === 'undefined') {{\n"
-            "            var operationDetails = {{}};\n"
-            "        }}\n"
-            "        // Add pending operations to modal data\n"
-        )
-        for op_id, op in sorted(
-            self.pending_ops.items(), key=lambda x: x[1].created_at, reverse=True
-        ):
-            op_data = {
-                "op_id": op_id,
-                "service": op.service,
-                "action": op.action,
-                "secrets": op.secrets,
-                "created_at": op.created_at,
-                "approved_at": op.approved_at,
-                "scan_file_path": op.scan_file_path,
-                "metadata": op.metadata or {},
-                "approved_by_credential": getattr(op, "approved_by_credential", None),
-                "approved_by_device": getattr(op, "approved_by_device", None),
-            }
-            js_data += f"        operationDetails['{op_id}'] = {json.dumps(op_data)};\n"
-        js_data += "    </script>\n"
 
         return f"""
     <div class="card">
@@ -1130,7 +1100,6 @@ class ApprovalServer:
             </tbody>
         </table>
     </div>
-    {js_data}
         """
 
     def _get_history_html(self) -> str:
