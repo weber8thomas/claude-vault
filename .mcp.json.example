@@ -13,6 +13,17 @@
         "VAULT_SECURITY_MODE": "tokenized",
         "VAULT_TOKEN_SESSION_TTL": "7200"
       }
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }
@@ -57,3 +68,26 @@
 // - Usage: export VAULT_MAX_TOKEN_TTL=7200 before "source claude-vault login"
 // - This caps the Vault OIDC token duration during authentication
 // - Note: This is set in your shell environment, not in this MCP config
+//
+// GitHub MCP Server Configuration
+// ────────────────────────────────────────────
+//
+// The GitHub MCP server enables Claude Code to interact with GitHub:
+// - List and monitor workflow runs
+// - View workflow logs and status
+// - Create/update issues and pull requests
+// - Search code and commits
+//
+// Setup:
+// 1. Create a personal access token at: https://github.com/settings/tokens/new
+// 2. Select scopes: "repo" and "workflow"
+// 3. Set the token in your environment:
+//    export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_your_token_here"
+// 4. Restart Claude Code
+//
+// Security:
+// - Use environment variables (shown above with ${...}) instead of hardcoding tokens
+// - Never commit tokens to git
+// - Add .mcp.json to .gitignore if it contains secrets
+//
+// See: docs/GITHUB_MCP_SETUP.md for full setup instructions
