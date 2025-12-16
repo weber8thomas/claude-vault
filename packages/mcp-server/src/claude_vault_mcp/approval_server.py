@@ -565,7 +565,10 @@ class ApprovalServer:
         }}
 
         // Store operation details globally (populated from server)
-        let operationDetails = {{}};
+        // Note: operationDetails is populated by the history section if present
+        if (typeof operationDetails === 'undefined') {{
+            var operationDetails = {{}};
+        }}
 
         function showOperationDetails(opId) {{
             const op = operationDetails[opId];
