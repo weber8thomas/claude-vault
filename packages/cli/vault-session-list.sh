@@ -3,11 +3,11 @@
 # This script uses AppRole authentication to list available secrets
 #
 # Usage:
-#   claude-vault list [service-name]
+#   vault-session list [service-name]
 #
 # Examples:
-#   claude-vault list              # List all services
-#   claude-vault list esphome      # List esphome secrets
+#   vault-session list              # List all services
+#   vault-session list esphome      # List esphome secrets
 
 set -e
 
@@ -30,7 +30,7 @@ check_session() {
         echo -e "${RED}❌ Error: No active Vault session${NC}"
         echo ""
         echo "Please authenticate first:"
-        echo -e "  ${GREEN}source claude-vault login${NC}"
+        echo -e "  ${GREEN}source vault-session login${NC}"
         echo ""
         exit 1
     fi
@@ -45,7 +45,7 @@ check_session() {
             echo "Session expired at: $EXPIRED_AT"
             echo ""
             echo "Please re-authenticate:"
-            echo -e "  ${GREEN}source claude-vault login${NC}"
+            echo -e "  ${GREEN}source vault-session login${NC}"
             echo ""
             exit 1
         fi
@@ -76,7 +76,7 @@ list_all_services() {
         echo -e "${YELLOW}⚠️  No services found in Vault${NC}"
         echo ""
         echo "To register a new service, use:"
-        echo "  claude-vault set <service-name> key=value ..."
+        echo "  vault-session set <service-name> key=value ..."
         return
     fi
 
@@ -105,7 +105,7 @@ list_service_secrets() {
         echo -e "${RED}❌ Service '$service' not found in Vault${NC}"
         echo ""
         echo "To register this service, use:"
-        echo "  claude-vault set $service key=value ..."
+        echo "  vault-session set $service key=value ..."
         exit 1
     fi
 
@@ -133,7 +133,7 @@ list_service_secrets() {
     echo ""
 
     echo -e "${YELLOW}💡 To view secret values:${NC}"
-    echo "  claude-vault get $service"
+    echo "  vault-session get $service"
     echo ""
 }
 

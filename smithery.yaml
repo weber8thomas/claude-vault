@@ -46,7 +46,7 @@ requirements:
 
 usage: |
   1. Start approval server: `vault-approve-server`
-  2. Authenticate to Vault: `source claude-vault login`
+  2. Authenticate to Vault: `source vault-session login`
   3. Configure Claude Code with the generated .mcp.json
   4. Register WebAuthn device at http://localhost:8091
   5. Ask Claude Code to help manage your secrets

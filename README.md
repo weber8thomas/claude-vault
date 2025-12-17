@@ -26,7 +26,7 @@ Managing many Docker/docker-compose services, each with their own `.env` files a
 **The Goal:**
 Migrate from non-production chaos (passwords in docker-compose files, untracked `.env` files) to a production-oriented HashiCorp Vault setup meeting these requirements:
 - **Cloud-compatible** - Must work across infrastructure
-- **AI-assisted** - Need Claude Code to help migrate services and manage secrets
+- **AI-assisted** - Need your AI agent to help migrate services and manage secrets
 - **Secure by default** - Require human-in-the-loop validation via WebAuthn to prevent unauthorized AI writes
 
 **The Result:**
@@ -41,7 +41,7 @@ AI handles the tedious migration work (reading old configs, registering secrets)
 ```
 ┌─────────────────┐
 │   You ask AI    │  "Scan my .env files and migrate to Vault"
-│  (Claude Code)  │
+│  (MCP Client)   │
 └────────┬────────┘
          │
          ▼
@@ -54,7 +54,7 @@ AI handles the tedious migration work (reading old configs, registering secrets)
          │                                      │
          ▼                                      ▼
 ┌─────────────────┐                   ┌─────────────────┐
-│   Claude API    │                   │  Approval Page  │
+│  AI Provider    │                   │  Approval Page  │
 │    (Remote)     │                   │  (Your Browser) │
 └─────────────────┘                   └────────┬────────┘
 Sees: @token-abc123                            │
@@ -70,7 +70,7 @@ Never sees: super_secret              Approve with TouchID
 
 ### Core Capabilities
 
-**🔒 Zero-Knowledge AI** - Secrets tokenized before reaching Claude API; MCP server runs locally, real values never leave your infrastructure
+**🔒 Zero-Knowledge AI** - Secrets tokenized before reaching the AI provider; MCP server runs locally, real values never leave your infrastructure
 
 **🤖 AI-Assisted Migration** - Natural language commands to scan `.env` files, docker-compose configs, and migrate secrets to Vault automatically
 
@@ -87,13 +87,13 @@ Never sees: super_secret              Approve with TouchID
 
 1. **You:** "Scan the docker-compose.yml in /services/jellyfin and migrate secrets to Vault"
 
-2. **Claude Code:** Calls `vault_scan_compose(service="jellyfin")`
+2. **AI:** Calls `vault_scan_compose(service="jellyfin")`
    - MCP server reads your docker-compose.yml
    - Detects secrets (passwords, API keys, etc.)
    - **Tokenizes them**: `JELLYFIN_PASSWORD="@token-a8f3d9e1"`
    - Creates operation requiring WebAuthn approval
 
-3. **Claude Code:** Shows you:
+3. **AI:** Shows you:
    ```
    📋 Found 5 secrets in jellyfin/docker-compose.yml:
    - JELLYFIN_PASSWORD: @token-a8f3d9e1
@@ -109,7 +109,7 @@ Never sees: super_secret              Approve with TouchID
    - Click "Approve with WebAuthn"
    - Authenticate with TouchID/Windows Hello
 
-5. **Claude Code:** After approval, calls `vault_set()`
+5. **AI:** After approval, calls `vault_set()`
    - Registers secrets in Vault at `secret/proxmox-services/jellyfin`
    - Generates `.env.example` with `<REDACTED>` placeholders
    - Creates documentation
@@ -120,7 +120,7 @@ Never sees: super_secret              Approve with TouchID
 
 **Audit and Rotate Secrets**
 
-Need to find all services using a specific database password? Ask Claude Code naturally:
+Need to find all services using a specific database password? Ask your AI naturally:
 ```
 "Which services are using the old database password?"
 "Help me rotate the database credentials for all affected services"
@@ -129,7 +129,7 @@ The AI reads Vault through the MCP server to help you understand your secret lan
 
 **Generate Service Configurations**
 
-Setting up a new service that needs 10+ environment variables from Vault? Let Claude Code handle it:
+Setting up a new service that needs 10+ environment variables from Vault? Let your AI handle it:
 ```
 "Create a .env file for my new API service using secrets from Vault"
 ```
@@ -198,7 +198,7 @@ curl -fsSL https://github.com/weber8thomas/mcp-vault/releases/latest/download/in
 curl -fsSL https://github.com/weber8thomas/mcp-vault/releases/latest/download/install.sh | PREFIX="$HOME/.local/bin" bash
 
 # Verify installation
-claude-vault --help
+vault-session --help
 ```
 
 #### Option C: Development Installation (From Source)
@@ -217,7 +217,7 @@ sudo ./install.sh
 
 # Verify installations
 vault-approve-server --help
-claude-vault --help
+vault-session --help
 ```
 
 ## Repository Structure
@@ -252,7 +252,7 @@ This starts a web server on **http://localhost:8091** where you'll:
 #### Step 2: Authenticate to Vault
 In another terminal, authenticate your session:
 ```bash
-source claude-vault login
+source vault-session login
 ```
 
 This will:
@@ -263,7 +263,7 @@ This will:
 
 **Verify authentication:**
 ```bash
-claude-vault status
+vault-session status
 ```
 
 #### Step 3: Configure Your MCP Client
@@ -317,7 +317,7 @@ When the AI needs to write secrets, it will:
 
 #### Step 1: Authenticate to Vault
 ```bash
-source claude-vault login
+source vault-session login
 ```
 
 This will:
@@ -328,7 +328,7 @@ This will:
 
 #### Step 2: Verify Session
 ```bash
-claude-vault status
+vault-session status
 ```
 
 Expected output:
@@ -343,41 +343,41 @@ Time Remaining: 59m 30s
 
 **List all services:**
 ```bash
-claude-vault list
+vault-session list
 ```
 
 **Get secrets for a service:**
 ```bash
-claude-vault get jellyfin
+vault-session get jellyfin
 # Returns: API_KEY, DB_PASSWORD, etc.
 ```
 
 **Register new secrets:**
 ```bash
-claude-vault set myapp API_KEY=abc123 DB_PASS=secret
+vault-session set myapp API_KEY=abc123 DB_PASS=secret
 ```
 
 **Inject secrets to .env file:**
 ```bash
-claude-vault inject myapp
+vault-session inject myapp
 # Creates myapp/.env with real values from Vault
 ```
 
 **Logout (revoke token):**
 ```bash
-claude-vault logout
+vault-session logout
 ```
 
 #### Available Commands
 | Command | Description | Example |
 |---------|-------------|---------|
-| `login` | Authenticate via OIDC+MFA | `source claude-vault login` |
-| `status` | Check session validity | `claude-vault status` |
-| `logout` | Revoke Vault token | `claude-vault logout` |
-| `list` | List services/secrets | `claude-vault list` or `claude-vault list myapp` |
-| `get` | Get secret values | `claude-vault get myapp` |
-| `set` | Create/update secrets | `claude-vault set myapp KEY=value` |
-| `inject` | Write secrets to .env | `claude-vault inject myapp` |
+| `login` | Authenticate via OIDC+MFA | `source vault-session login` |
+| `status` | Check session validity | `vault-session status` |
+| `logout` | Revoke Vault token | `vault-session logout` |
+| `list` | List services/secrets | `vault-session list` or `vault-session list myapp` |
+| `get` | Get secret values | `vault-session get myapp` |
+| `set` | Create/update secrets | `vault-session set myapp KEY=value` |
+| `inject` | Write secrets to .env | `vault-session inject myapp` |
 
 ## WebAuthn Approval Workflow
 
@@ -468,8 +468,8 @@ If you have secrets that should never be accessible to AI tooling at all:
 
 1. **Use CLI directly** - Bypass MCP server entirely:
    ```bash
-   source claude-vault login
-   claude-vault set prod-db MASTER_KEY="..."
+   source vault-session login
+   vault-session set prod-db MASTER_KEY="..."
    ```
 
 2. **Hybrid approach** - Let AI structure, you provide values:
@@ -499,8 +499,8 @@ See [Security FAQ](packages/mcp-server/WEBAUTHN_SETUP.md#security-faq) for detai
 Releases are automatically created when new version tags are pushed. Each release includes:
 
 - `install.sh` - Standalone installer (downloads latest from GitHub)
-- `claude-vault-vX.X.X-linux-amd64.tar.gz` - Full tarball archive
-- `claude-vault-vX.X.X-linux-amd64.zip` - Full ZIP archive
+- `vault-session-vX.X.X-linux-amd64.tar.gz` - Full tarball archive
+- `vault-session-vX.X.X-linux-amd64.zip` - Full ZIP archive
 - `checksums.txt` - SHA256 checksums for verification
 
 **One-command installation from release:**

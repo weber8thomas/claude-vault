@@ -3,11 +3,11 @@
 # This script displays actual secret values (use with caution)
 #
 # Usage:
-#   claude-vault get <service-name> [key-name]
+#   vault-session get <service-name> [key-name]
 #
 # Examples:
-#   claude-vault get esphome              # Show all secrets for esphome
-#   claude-vault get esphome wifi_ssid    # Show only wifi_ssid value
+#   vault-session get esphome              # Show all secrets for esphome
+#   vault-session get esphome wifi_ssid    # Show only wifi_ssid value
 
 set -e
 
@@ -46,7 +46,7 @@ check_session() {
         echo -e "${RED}❌ Error: No active Vault session${NC}"
         echo ""
         echo "Please authenticate first:"
-        echo -e "  ${GREEN}source claude-vault login${NC}"
+        echo -e "  ${GREEN}source vault-session login${NC}"
         echo ""
         exit 1
     fi
@@ -61,7 +61,7 @@ check_session() {
             echo "Session expired at: $EXPIRED_AT"
             echo ""
             echo "Please re-authenticate:"
-            echo -e "  ${GREEN}source claude-vault login${NC}"
+            echo -e "  ${GREEN}source vault-session login${NC}"
             echo ""
             exit 1
         fi
@@ -93,7 +93,7 @@ if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
     echo -e "${RED}❌ Service '$SERVICE_NAME' not found in Vault${NC}"
     echo ""
     echo "To list available services, use:"
-    echo "  claude-vault list"
+    echo "  vault-session list"
     exit 1
 fi
 

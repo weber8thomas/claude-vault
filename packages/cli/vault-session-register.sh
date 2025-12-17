@@ -6,9 +6,9 @@
 # to protect against prompt injection attacks when used by AI assistants.
 #
 # Usage:
-#   claude-vault set <service-name> <key1=value1> [key2=value2] [...]
-#   claude-vault set --dry-run <service-name> <key1=value1> [...]
-#   claude-vault set --no-confirm <service-name> <key1=value1> [...]
+#   vault-session set <service-name> <key1=value1> [key2=value2] [...]
+#   vault-session set --dry-run <service-name> <key1=value1> [...]
+#   vault-session set --no-confirm <service-name> <key1=value1> [...]
 
 set -e
 
@@ -25,7 +25,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 VAULT_ADDR="${VAULT_ADDR:-https://vault.example.com}"
-AUDIT_LOG="$REPO_ROOT/.claude-vault-audit.log"
+AUDIT_LOG="$REPO_ROOT/.vault-session-audit.log"
 
 # Flags
 DRY_RUN=false
@@ -151,7 +151,7 @@ check_session() {
         echo -e "${RED}❌ Error: No active Vault session${NC}"
         echo ""
         echo "Please authenticate first:"
-        echo -e "  ${GREEN}source claude-vault login${NC}"
+        echo -e "  ${GREEN}source vault-session login${NC}"
         echo ""
         log_audit "NO_SESSION" "$SERVICE_NAME" "No active session"
         exit 1
@@ -167,7 +167,7 @@ check_session() {
             echo "Session expired at: $EXPIRED_AT"
             echo ""
             echo "Please re-authenticate:"
-            echo -e "  ${GREEN}source claude-vault login${NC}"
+            echo -e "  ${GREEN}source vault-session login${NC}"
             echo ""
             log_audit "SESSION_EXPIRED" "$SERVICE_NAME" "Session expired"
             exit 1
@@ -387,8 +387,8 @@ if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 204 ]; then
     done
     echo ""
     echo -e "${CYAN}Next steps:${NC}"
-    echo "  1. List secrets: claude-vault list $SERVICE_NAME"
-    echo "  2. Inject to .env: claude-vault inject $SERVICE_NAME"
+    echo "  1. List secrets: vault-session list $SERVICE_NAME"
+    echo "  2. Inject to .env: vault-session inject $SERVICE_NAME"
     echo ""
     echo -e "${CYAN}Audit log:${NC}"
     echo "  Logged to: $AUDIT_LOG"

@@ -9,7 +9,7 @@
 # Examples:
 #   export VAULT_MAX_TOKEN_TTL=7200  # 2 hours
 #   export VAULT_MAX_TOKEN_TTL=10800 # 3 hours
-#   source claude-vault login
+#   source vault-session login
 
 # Colors
 RED='\033[0;31m'
@@ -132,8 +132,8 @@ echo "  • VAULT_TOKEN"
 echo "  • VAULT_TOKEN_EXPIRY"
 echo ""
 echo -e "${CYAN}You can now use:${NC}"
-echo "  • claude-vault status"
-echo "  • claude-vault list"
-echo "  • claude-vault get <service>"
-echo "  • claude-vault set <service> key=value"
+echo "  • vault-session status"
+echo "  • vault-session list"
+echo "  • vault-session get <service>"
+echo "  • vault-session set <service> key=value"
 echo ""

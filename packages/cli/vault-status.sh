@@ -25,7 +25,7 @@ if [ -z "$VAULT_TOKEN" ]; then
     echo "No active Vault session found."
     echo ""
     echo "To authenticate, run:"
-    echo -e "  ${GREEN}source claude-vault login${NC}"
+    echo -e "  ${GREEN}source vault-session login${NC}"
     echo ""
     exit 1
 fi
@@ -41,7 +41,7 @@ if [ -n "$VAULT_TOKEN_EXPIRY" ]; then
         echo "Token expired at: $EXPIRED_AT"
         echo ""
         echo "To re-authenticate:"
-        echo -e "  ${GREEN}source claude-vault login${NC}"
+        echo -e "  ${GREEN}source vault-session login${NC}"
         echo ""
         exit 1
     fi
@@ -66,7 +66,7 @@ if ! echo "$TOKEN_INFO" | jq -e '.data' >/dev/null 2>&1; then
     echo "Your session may have been revoked or the token is invalid."
     echo ""
     echo "To re-authenticate:"
-    echo -e "  ${GREEN}source claude-vault login${NC}"
+    echo -e "  ${GREEN}source vault-session login${NC}"
     echo ""
     exit 1
 fi
@@ -138,14 +138,14 @@ if [ -n "$REMAINING_MIN" ]; then
         echo -e "${YELLOW}⚠️  Session expires soon - consider re-authenticating${NC}"
         echo ""
         echo "To extend session:"
-        echo -e "  ${GREEN}source claude-vault login${NC}"
+        echo -e "  ${GREEN}source vault-session login${NC}"
     else
         echo -e "${GREEN}✅ Session active and valid${NC}"
         echo ""
         echo "You can now use Claude Code to:"
-        echo "  • List secrets: ./scripts/claude-vault list"
-        echo "  • Get secrets: ./scripts/claude-vault get <service>"
-        echo "  • Register secrets: ./scripts/claude-vault set <service> key=val"
+        echo "  • List secrets: ./scripts/vault-session list"
+        echo "  • Get secrets: ./scripts/vault-session get <service>"
+        echo "  • Register secrets: ./scripts/vault-session set <service> key=val"
     fi
 else
     echo -e "${YELLOW}⚠️  Session expiry not tracked${NC}"
