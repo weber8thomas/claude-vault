@@ -31,13 +31,13 @@ User authenticates → VAULT_TOKEN exported → MCP server reads env → Claude 
 ### 1. Installation
 
 ```bash
-cd /path/to/claude-vault/packages/mcp-server
+cd /path/to/mcp-vault/packages/mcp-server
 
 # Install in development mode
 pip install -e .
 
 # Or install from PyPI (when published)
-pip install claude-vault-mcp
+pip install mcp-vault
 ```
 
 ### 2. Configure MCP Server (One-time)
@@ -64,8 +64,8 @@ Edit `.mcp.json` to point to your claude-vault installation:
       "command": "uvx",
       "args": [
         "--from",
-        "/path/to/claude-vault/packages/mcp-server",
-        "claude-vault-mcp"
+        "/path/to/mcp-vault/packages/mcp-server",
+        "mcp-vault"
       ],
       "env": {
         "VAULT_ADDR": "https://vault.example.com"
@@ -81,7 +81,7 @@ Edit `.mcp.json` to point to your claude-vault installation:
 # Add MCP server with project scope
 claude mcp add --transport stdio claude-vault --scope project \
   --env VAULT_ADDR=https://vault.example.com \
-  -- uvx --from /path/to/claude-vault/packages/mcp-server claude-vault-mcp
+  -- uvx --from /path/to/mcp-vault/packages/mcp-server mcp-vault
 ```
 
 **Verify Configuration:**
@@ -328,7 +328,7 @@ source claude-vault login
 ### Project Structure
 
 ```
-claude-vault-mcp/
+mcp-vault/
 ├── pyproject.toml          # Package config
 ├── README.md               # This file
 ├── src/
@@ -352,10 +352,10 @@ claude-vault-mcp/
 pip install -e ".[dev]"
 
 # Run MCP Inspector for debugging
-npx @modelcontextprotocol/inspector claude-vault-mcp
+npx @modelcontextprotocol/inspector mcp-vault
 
 # Manual test
-claude-vault-mcp
+mcp-vault
 # (Starts stdio server, send JSON-RPC requests)
 ```
 

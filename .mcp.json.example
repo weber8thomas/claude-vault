@@ -5,8 +5,8 @@
       "command": "uvx",
       "args": [
         "--from",
-        "/path/to/claude-vault/packages/mcp-server",
-        "claude-vault-mcp"
+        "/path/to/mcp-vault/packages/mcp-server",
+        "mcp-vault"
       ],
       "env": {
         "VAULT_ADDR": "https://vault.example.com",

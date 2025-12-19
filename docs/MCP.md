@@ -32,7 +32,7 @@ claude-vault:
   Status: ✓ Connected
   Type: stdio
   Command: uvx
-  Args: --from /path/to/claude-vault/packages/mcp-server claude-vault-mcp
+  Args: --from /path/to/mcp-vault/packages/mcp-server mcp-vault
   Environment:
     VAULT_ADDR=https://vault.laboiteaframboises.duckdns.org
 ```
@@ -250,7 +250,7 @@ See [CLAUDE_VAULT_SETUP.md](./CLAUDE_VAULT_SETUP.md#prerequisites) for complete 
    claude mcp remove claude-vault -s project
    claude mcp add --transport stdio claude-vault --scope project \
      --env VAULT_ADDR=https://vault.example.com \
-     -- uvx --from /path/to/claude-vault/packages/mcp-server claude-vault-mcp
+     -- uvx --from /path/to/mcp-vault/packages/mcp-server mcp-vault
    ```
 
 ## How It Works
@@ -323,8 +323,8 @@ See [CLAUDE_VAULT_SETUP.md](./CLAUDE_VAULT_SETUP.md#prerequisites) for complete 
       "command": "uvx",
       "args": [
         "--from",
-        "/path/to/claude-vault/packages/mcp-server",
-        "claude-vault-mcp"
+        "/path/to/mcp-vault/packages/mcp-server",
+        "mcp-vault"
       ],
       "env": {
         "VAULT_ADDR": "https://vault.example.com"
@@ -337,7 +337,7 @@ See [CLAUDE_VAULT_SETUP.md](./CLAUDE_VAULT_SETUP.md#prerequisites) for complete 
 **Key fields:**
 - `type`: "stdio" (MCP server uses stdin/stdout for communication)
 - `command`: "uvx" (Python package runner by Astral)
-- `args`: Path to claude-vault-mcp package
+- `args`: Path to mcp-vault package
 - `env.VAULT_ADDR`: Public Vault URL (not sensitive, safe to commit)
 
 **Not in config:**
@@ -369,7 +369,7 @@ MCP servers can be configured at three scopes:
 Use MCP Inspector for debugging:
 
 ```bash
-npx @modelcontextprotocol/inspector uvx --from /path/to/claude-vault/packages/mcp-server claude-vault-mcp
+npx @modelcontextprotocol/inspector uvx --from /path/to/mcp-vault/packages/mcp-server mcp-vault
 ```
 
 This opens a web UI where you can:
