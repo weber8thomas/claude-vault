@@ -288,6 +288,25 @@ Add to your `.mcp.json`:
 
 > **Note:** If you installed from source (Option C), use the full path: `"args": ["--from", "/path/to/mcp-vault/packages/mcp-server", "mcp-vault"]`
 
+**Production Deployment (Nginx/HTTPS):**
+If you're using nginx reverse proxy with HTTPS, configure the approval server domain:
+```json
+{
+  "mcpServers": {
+    "mcp-vault": {
+      "env": {
+        "VAULT_ADDR": "https://vault.example.com",
+        "VAULT_TOKEN": "${VAULT_TOKEN}",
+        "VAULT_SECURITY_MODE": "tokenized",
+        "VAULT_APPROVE_DOMAIN": "vault-approve.yourdomain.com",
+        "VAULT_APPROVE_ORIGIN": "https://vault-approve.yourdomain.com"
+      }
+    }
+  }
+}
+```
+See [WEBAUTHN_SETUP.md](packages/mcp-server/WEBAUTHN_SETUP.md#production-deployment-with-nginxhttps) for full nginx configuration.
+
 **For other MCP clients:**
 - **Gemini CLI:** `gemini-cli --mcp-server mcp-vault`
 - **OpenAI Agents:** Configure in agents config file

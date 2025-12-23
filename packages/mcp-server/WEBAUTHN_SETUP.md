@@ -440,6 +440,111 @@ AI Output: "⚠️ Approval required: http://localhost:8091/approve/abc123"
 | **Phishing: Fake approval page** | Origin binding prevents credentials from working on fake site |
 | **Man-in-the-middle intercepts token** | Token alone insufficient, needs approved operation state |
 
+## Production Deployment with Nginx/HTTPS
+
+The approval server defaults to **local development mode** (`http://localhost:8091`). For production deployment with nginx reverse proxy and HTTPS, you need to configure the domain and origin.
+
+### Environment Variables
+
+Set these environment variables before starting the MCP server or approval server:
+
+```bash
+# Production configuration (with nginx reverse proxy)
+export VAULT_APPROVE_DOMAIN="vault-approve.yourdomain.com"
+export VAULT_APPROVE_ORIGIN="https://vault-approve.yourdomain.com"
+export VAULT_APPROVE_PORT="8091"  # Internal port (nginx proxies to this)
+```
+
+**Why these are needed:**
+- `VAULT_APPROVE_DOMAIN`: Used as WebAuthn `rp_id` (Relying Party ID) - must match your domain
+- `VAULT_APPROVE_ORIGIN`: Used for approval URL generation and WebAuthn origin validation
+- `VAULT_APPROVE_PORT`: Internal port the server listens on (nginx forwards to this)
+
+### Nginx Configuration Example
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name vault-approve.yourdomain.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:8091;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Docker Compose Integration
+
+If running in Docker (like code-server), forward the approval server port:
+
+```yaml
+services:
+  code-server:
+    ports:
+      - "8091:8091"  # Forward approval server port
+    environment:
+      - VAULT_APPROVE_DOMAIN=vault-approve.yourdomain.com
+      - VAULT_APPROVE_ORIGIN=https://vault-approve.yourdomain.com
+      - VAULT_APPROVE_PORT=8091
+```
+
+### Configuration Modes
+
+| Mode | Domain | Origin | When to Use |
+|------|--------|--------|-------------|
+| **Local Development** | `localhost` | `http://localhost:8091` | Default, no nginx |
+| **Production (HTTPS)** | `vault-approve.domain.com` | `https://vault-approve.domain.com` | With nginx reverse proxy |
+| **Custom Port** | `localhost` | `http://localhost:9000` | Set `VAULT_APPROVE_PORT=9000` |
+
+### Switching Between Local and Production
+
+**No environment variables set:**
+```bash
+# Uses defaults: localhost, http://localhost:8091
+vault_set(service="myapp", secrets={...})
+# Returns: http://localhost:8091/approve/abc123
+```
+
+**With production environment variables:**
+```bash
+export VAULT_APPROVE_DOMAIN="vault-approve.yourdomain.com"
+export VAULT_APPROVE_ORIGIN="https://vault-approve.yourdomain.com"
+
+vault_set(service="myapp", secrets={...})
+# Returns: https://vault-approve.yourdomain.com/approve/abc123
+```
+
+### Important Notes
+
+1. **WebAuthn origin validation is strict**: The origin in the URL must match `VAULT_APPROVE_ORIGIN` exactly
+2. **Register your device in the same environment** you'll approve from:
+   - Local: Register at `http://localhost:8091/register`
+   - Production: Register at `https://vault-approve.yourdomain.com/register`
+3. **Credentials are environment-specific**: If you switch from local to production, you'll need to re-register
+4. **Nginx must preserve headers**: Especially `Host` and `X-Forwarded-Proto` for WebAuthn to work
+
+### Troubleshooting Production Setup
+
+**"Origin mismatch" error:**
+- Check that `VAULT_APPROVE_ORIGIN` matches the URL in your browser exactly
+- Verify nginx is setting `X-Forwarded-Proto: https`
+
+**Approval URLs still using localhost:**
+- Environment variables must be set **before** the MCP server starts
+- Restart the MCP server after setting environment variables
+
+**WebAuthn fails with "Invalid origin":**
+- Domain in URL must match `VAULT_APPROVE_DOMAIN`
+- Origin must match `VAULT_APPROVE_ORIGIN`
+- Both must use HTTPS in production (not HTTP)
+
 ## Advanced: Multiple Devices
 
 To approve from multiple devices (e.g., Mac and Linux):

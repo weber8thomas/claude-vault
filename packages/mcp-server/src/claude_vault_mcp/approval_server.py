@@ -54,8 +54,8 @@ class ApprovalServer:
     def __init__(
         self,
         port: int = 8091,
-        domain: str = "vault-approve.laboiteaframboises.duckdns.org",
-        origin: str = "https://vault-approve.laboiteaframboises.duckdns.org",
+        domain: str = "localhost",
+        origin: str = "http://localhost:8091",
     ):
         self.port = port
         self.domain = domain  # rp_id for WebAuthn
@@ -2274,13 +2274,29 @@ _approval_server: Optional[ApprovalServer] = None
 
 
 def get_approval_server() -> ApprovalServer:
-    """Get or create the global approval server instance."""
+    """
+    Get or create the global approval server instance.
+
+    Configuration via environment variables:
+    - VAULT_APPROVE_PORT: Port to listen on (default: 8091)
+    - VAULT_APPROVE_DOMAIN: WebAuthn rp_id domain (default: localhost)
+    - VAULT_APPROVE_ORIGIN: Expected origin for approval URLs (default: http://localhost:8091)
+
+    For local development (default):
+      No environment variables needed. Server runs at http://localhost:8091
+
+    For production with nginx reverse proxy:
+      export VAULT_APPROVE_DOMAIN="vault-approve.yourdomain.com"
+      export VAULT_APPROVE_ORIGIN="https://vault-approve.yourdomain.com"
+
+    See WEBAUTHN_SETUP.md for full nginx configuration.
+    """
     global _approval_server
     if _approval_server is None:
         # Read configuration from environment variables
-        domain = os.getenv("VAULT_APPROVE_DOMAIN", "vault-approve.laboiteaframboises.duckdns.org")
-        origin = os.getenv("VAULT_APPROVE_ORIGIN", f"https://{domain}")
         port = int(os.getenv("VAULT_APPROVE_PORT", "8091"))
+        domain = os.getenv("VAULT_APPROVE_DOMAIN", "localhost")
+        origin = os.getenv("VAULT_APPROVE_ORIGIN", f"http://localhost:{port}")
 
         _approval_server = ApprovalServer(port=port, domain=domain, origin=origin)
         _approval_server.start()
