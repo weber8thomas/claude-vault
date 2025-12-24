@@ -1,20 +1,23 @@
 # Bandit security scanner configuration
 # https://bandit.readthedocs.io/en/latest/config.html
 
-[bandit]
 # B105: hardcoded_password_string - False positives for empty strings and display variables
 # B106: hardcoded_password_funcarg - False positives in error handling with empty strings
 # B104: hardcoded_bind_all_interfaces - Approval server intentionally binds to 0.0.0.0 for container use
 # B404: import_subprocess - Legitimate use in vault-inject.sh wrapper
 # B603: subprocess_without_shell_equals_true - Safe subprocess calls with validated paths
 
-skips = B105,B106,B104,B404,B603
+skips:
+  - B105
+  - B106
+  - B104
+  - B404
+  - B603
 
 # Only scan source files
-exclude_dirs = [
-    "/test",
-    "/tests",
-    "/.venv",
-    "/venv",
-    "/__pycache__",
-]
+exclude_dirs:
+  - /test
+  - /tests
+  - /.venv
+  - /venv
+  - /__pycache__
