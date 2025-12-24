@@ -19,6 +19,12 @@ export VAULT_TOKEN="demo-token"
 # Verify connection
 vault status
 
+# Install mcp-vault (if not already installed)
+# This provides the vault-approve-server command
+pip install mcp-vault
+# OR if you're in the dev environment:
+# pip install -e /workspace/mcp-vault/packages/mcp-server
+
 # Start approval server (uses ~/.claude-vault/ but that's okay for temp data)
 vault-approve-server
 
