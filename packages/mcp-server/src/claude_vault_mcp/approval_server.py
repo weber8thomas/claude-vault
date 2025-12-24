@@ -1166,9 +1166,9 @@ class ApprovalServer:
 
         js_data = (
             "    <script>\n"
-            "        if (typeof operationDetails === 'undefined') {{\n"
-            "            var operationDetails = {{}};\n"
-            "        }}\n"
+            "        if (typeof operationDetails === 'undefined') {\n"
+            "            var operationDetails = {};\n"
+            "        }\n"
             "        // Add completed operations to modal data\n"
         )
         for op_id, op in sorted_ops[:100]:

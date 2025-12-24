@@ -1,0 +1,10 @@
+# Ignore actual .env file (even though it's fake for demo)
+# This demonstrates best practice
+.env
+
+# Ignore backup files
+.env.backup.*
+*.backup
+
+# Ignore Docker volumes
+html/.gitkeep
